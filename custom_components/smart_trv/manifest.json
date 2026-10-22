@@ -1,0 +1,13 @@
+{
+  "domain": "smart_trv",
+  "name": "Smart TRV (PI)",
+  "codeowners": ["@Tntdruid"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/Tntdruid/ha-smart-trv",
+  "issue_tracker": "https://github.com/Tntdruid/ha-smart-trv/issues",
+  "integration_type": "device",
+  "iot_class": "calculated",
+  "requirements": [],
+  "version": "0.2.0"
+}

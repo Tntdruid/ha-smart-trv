@@ -1,0 +1,85 @@
+{#- Smart TRV dashboard generator.
+    Paste everything into Developer tools -> Template. Copy the output on the right and paste it into
+    a new dashboard: Edit dashboard -> ⋮ -> Raw configuration editor.
+    Makes one view per Smart TRV, using whatever your entities are actually called. -#}
+{%- set rooms = integration_entities('smart_trv') | select('match', 'climate[.]') | list -%}
+{%- if not rooms -%}
+# No Smart TRV found. Is the integration added, and has Home Assistant been restarted?
+{%- else -%}
+title: Varme
+views:
+{%- for c in rooms %}
+{%- set ents = device_entities(device_id(c)) | select('match', 'sensor[.]') | list %}
+{%- set s_status = ents | select('search', '_status$') | first %}
+{%- set s_set = ents | select('search', '_trv_setpoint$') | first %}
+{%- set s_trv = ents | select('search', '_trv_temperature$') | first %}
+{%- set s_err = ents | select('search', '_error$') | first %}
+{%- set s_p = ents | select('search', '_p_term$') | first %}
+{%- set s_i = ents | select('search', '_integral$') | first %}
+{%- set n_night = device_entities(device_id(c)) | select('search', '^number[.].*_night_temperature$') | first %}
+  - title: {{ (state_attr(c, 'friendly_name') or c) | tojson }}
+    path: {{ c.split('.')[1] | replace('_', '-') }}
+    type: sections
+    max_columns: 3
+    sections:
+      - type: grid
+        cards:
+          - type: heading
+            heading: Lige nu
+          - type: thermostat
+            entity: {{ c }}
+{%- if s_status %}
+          - type: markdown
+            content: {{ ("**{{ state_translated('" ~ s_status ~ "') }}**\n\n{{ state_attr('" ~ s_status ~ "', 'explanation') }}") | tojson }}
+{%- endif %}
+{%- for s in [s_set, s_trv, s_err, s_i] if s %}
+          - type: tile
+            entity: {{ s }}
+{%- endfor %}
+{%- if n_night %}
+          - type: tile
+            entity: {{ n_night }}
+            name: Nattemperatur
+            features:
+              - type: numeric-input
+                style: buttons
+{%- endif %}
+      - type: grid
+        column_span: 2
+        cards:
+          - type: heading
+            heading: Rummet
+          - type: history-graph
+            title: Rumtemperatur og mål (24 t)
+            hours_to_show: 24
+            entities:
+              - entity: {{ c }}
+{%- if s_set or s_trv %}
+          - type: history-graph
+            title: Hvad TRV'en får besked på (24 t)
+            hours_to_show: 24
+            entities:
+{%- for s in [s_set, s_trv] if s %}
+              - entity: {{ s }}
+{%- endfor %}
+{%- endif %}
+{%- if s_err or s_p or s_i %}
+          - type: history-graph
+            title: Regulatoren (48 t)
+            hours_to_show: 48
+            entities:
+{%- for s in [s_err, s_p, s_i] if s %}
+              - entity: {{ s }}
+{%- endfor %}
+{%- endif %}
+          - type: logbook
+            title: Hvad den har gjort
+            hours_to_show: 24
+            target:
+              entity_id:
+                - {{ c }}
+{%- if s_status %}
+                - {{ s_status }}
+{%- endif %}
+{%- endfor %}
+{%- endif %}

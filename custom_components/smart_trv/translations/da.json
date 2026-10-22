@@ -1,0 +1,97 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Smart TRV",
+        "data": {
+          "name": "Navn",
+          "room_sensor": "Rumtemperatur-sensor",
+          "trvs": "Radiatortermostater (TRV)",
+          "windows": "Vindue-/dørsensorer",
+          "kp": "Kp",
+          "ki": "Ki",
+          "max_boost": "Max TRV-boost over mål",
+          "max_cut": "Max TRV-sænkning under mål",
+          "trv_step": "TRV-trin",
+          "interval": "Reguleringsinterval",
+          "night_entity": "Natplan"
+        },
+        "data_description": {
+          "room_sensor": "Sensoren der måler den temperatur, du faktisk vil styre efter.",
+          "kp": "Hvor kraftigt der reageres på den aktuelle afvigelse (TRV °C pr. rum °C). Standard 3,0.",
+          "ki": "Hvor hurtigt den resterende afvigelse læres (°C pr. °C·time). Højere fjerner de sidste 0,5 °C hurtigere, men kan give overshoot. Standard 1,0.",
+          "max_boost": "Hvor langt over målet TRV'ens setpunkt må gå for at presse varme ind.",
+          "trv_step": "TV02 tager 0,5 °C trin.",
+          "night_entity": "En tidsplan (schedule), input_boolean eller binary_sensor. Når den er tændt, bruger rummet sin nattemperatur (indstilles på enhedssiden eller dashboardet)."
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Smart TRV",
+        "data": {
+          "room_sensor": "Rumtemperatur-sensor",
+          "trvs": "Radiatortermostater (TRV)",
+          "windows": "Vindue-/dørsensorer",
+          "kp": "Kp",
+          "ki": "Ki",
+          "max_boost": "Max TRV-boost over mål",
+          "max_cut": "Max TRV-sænkning under mål",
+          "trv_step": "TRV-trin",
+          "interval": "Reguleringsinterval",
+          "night_entity": "Natplan"
+        },
+        "data_description": {
+          "room_sensor": "Sensoren der måler den temperatur, du faktisk vil styre efter.",
+          "kp": "Hvor kraftigt der reageres på den aktuelle afvigelse (TRV °C pr. rum °C). Standard 3,0.",
+          "ki": "Hvor hurtigt den resterende afvigelse læres (°C pr. °C·time). Højere fjerner de sidste 0,5 °C hurtigere, men kan give overshoot. Standard 1,0.",
+          "max_boost": "Hvor langt over målet TRV'ens setpunkt må gå for at presse varme ind.",
+          "trv_step": "TV02 tager 0,5 °C trin.",
+          "night_entity": "En tidsplan (schedule), input_boolean eller binary_sensor. Når den er tændt, bruger rummet sin nattemperatur (indstilles på enhedssiden eller dashboardet)."
+        }
+      }
+    }
+  },
+  "services": {
+    "reset_integral": {
+      "name": "Nulstil lært offset",
+      "description": "Glem det lærte integral og start forfra ud fra forskellen mellem TRV- og rumsensor."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "status": {
+        "name": "Status",
+        "state": {
+          "heating": "Varmer",
+          "idle": "Ventil lukket",
+          "window_open": "Vindue åbent",
+          "off": "Slukket",
+          "no_sensor": "Ingen rummåling"
+        }
+      },
+      "trv_setpoint": {
+        "name": "TRV-setpunkt"
+      },
+      "trv_temperature": {
+        "name": "TRV-temperatur"
+      },
+      "error": {
+        "name": "Afvigelse (mål − rum)"
+      },
+      "p_term": {
+        "name": "Reaktion nu (P)"
+      },
+      "integral": {
+        "name": "Lært offset (I)"
+      }
+    },
+    "number": {
+      "night_temperature": {
+        "name": "Nattemperatur"
+      }
+    }
+  }
+}

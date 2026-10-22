@@ -1,0 +1,80 @@
+"""PI controller that turns a room target into a TRV setpoint.
+
+Kept free of Home Assistant imports so it can be tested on its own.
+
+Why PI: Better Thermostat (target-temperature mode) shifts the TRV setpoint by
+the measured difference between the TRV sensor and the room sensor. That is a
+proportional correction, and a proportional-only loop always settles with a
+remaining error -- typically the 0.5 °C you see. The integral term keeps
+pushing the TRV setpoint up for as long as the room is below target, so the
+remaining error goes to zero.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+
+@dataclass
+class PIController:
+    kp: float
+    ki: float
+    max_boost: float
+    max_cut: float
+    step: float = 0.5
+    min_temp: float = 5.0
+    max_temp: float = 30.0
+    # Big errors (after airing, a new target) are P's job; integrating them at full
+    # weight winds up and overshoots hours later. They count as at most this much.
+    integral_band: float = 0.3
+    # When the TRV setpoint is this far from what the TRV itself measures, its valve is
+    # already fully open (or closed). Moving the setpoint further changes nothing, so
+    # don't learn from it: that's how a cold radiator at night winds up the integral.
+    valve_margin: float = 1.0
+    integral: float = 0.0
+    error: float = 0.0
+    valve_saturated: bool = False
+
+    def seed(self, trv_temp: float | None, room_temp: float) -> None:
+        """Start the integral at the TRV/room sensor difference (what BT would use)."""
+        if trv_temp is None:
+            return
+        # A TRV on a radiator never really reads colder than the room; if it does, it's a
+        # leftover local_temperature_calibration offset and not something to learn from.
+        self.integral = self._clamp(trv_temp - room_temp, 0.0, self.max_boost)
+
+    def update(
+        self, target: float, room_temp: float, dt_hours: float, trv_temp: float | None = None
+    ) -> float:
+        """Return the TRV setpoint, rounded to the TRV's step."""
+        self.error = target - room_temp
+        p = self.kp * self.error
+
+        self.valve_saturated = False
+        if trv_temp is not None:
+            current = target + p + self.integral
+            self.valve_saturated = (
+                current - trv_temp >= self.valve_margin and self.error > 0
+            ) or (trv_temp - current >= self.valve_margin and self.error < 0)
+
+        if dt_hours > 0 and not self.valve_saturated:
+            learn = self._clamp(self.error, -self.integral_band, self.integral_band)
+            candidate = self._clamp(
+                self.integral + self.ki * learn * dt_hours,
+                -self.max_cut,
+                self.max_boost,
+            )
+            # Anti-windup: don't grow the integral while the output is already saturated.
+            unsat = p + candidate
+            saturated_high = unsat > self.max_boost and self.error > 0
+            saturated_low = unsat < -self.max_cut and self.error < 0
+            if not (saturated_high or saturated_low):
+                self.integral = candidate
+
+        offset = self._clamp(p + self.integral, -self.max_cut, self.max_boost)
+        setpoint = self._clamp(target + offset, self.min_temp, self.max_temp)
+        return round(round(setpoint / self.step) * self.step, 2)
+
+    @staticmethod
+    def _clamp(value: float, low: float, high: float) -> float:
+        return max(low, min(high, value))

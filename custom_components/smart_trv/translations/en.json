@@ -1,0 +1,97 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Smart TRV",
+        "data": {
+          "name": "Name",
+          "room_sensor": "Room temperature sensor",
+          "trvs": "Radiator thermostats (TRVs)",
+          "windows": "Window/door sensors",
+          "kp": "Kp",
+          "ki": "Ki",
+          "max_boost": "Max TRV boost above target",
+          "max_cut": "Max TRV cut below target",
+          "trv_step": "TRV setpoint step",
+          "interval": "Control interval",
+          "night_entity": "Night schedule"
+        },
+        "data_description": {
+          "room_sensor": "The sensor that measures the temperature you actually care about.",
+          "kp": "How hard to react to the current error (TRV °C per room °C). Default 3.0.",
+          "ki": "How fast to learn the remaining offset (°C per °C·hour). Higher removes the last 0.5 °C faster but can overshoot. Default 1.0.",
+          "max_boost": "How far above your target the TRV setpoint may go to push heat in.",
+          "trv_step": "TV02 accepts 0.5 °C steps.",
+          "night_entity": "A schedule, input_boolean or binary_sensor. While it is on, the room uses its night temperature (set on the device page or the dashboard)."
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Smart TRV",
+        "data": {
+          "room_sensor": "Room temperature sensor",
+          "trvs": "Radiator thermostats (TRVs)",
+          "windows": "Window/door sensors",
+          "kp": "Kp",
+          "ki": "Ki",
+          "max_boost": "Max TRV boost above target",
+          "max_cut": "Max TRV cut below target",
+          "trv_step": "TRV setpoint step",
+          "interval": "Control interval",
+          "night_entity": "Night schedule"
+        },
+        "data_description": {
+          "room_sensor": "The sensor that measures the temperature you actually care about.",
+          "kp": "How hard to react to the current error (TRV °C per room °C). Default 3.0.",
+          "ki": "How fast to learn the remaining offset (°C per °C·hour). Higher removes the last 0.5 °C faster but can overshoot. Default 1.0.",
+          "max_boost": "How far above your target the TRV setpoint may go to push heat in.",
+          "trv_step": "TV02 accepts 0.5 °C steps.",
+          "night_entity": "A schedule, input_boolean or binary_sensor. While it is on, the room uses its night temperature (set on the device page or the dashboard)."
+        }
+      }
+    }
+  },
+  "services": {
+    "reset_integral": {
+      "name": "Reset learned offset",
+      "description": "Forget the learned integral and start again from the TRV/room sensor difference."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "status": {
+        "name": "Status",
+        "state": {
+          "heating": "Heating",
+          "idle": "Valve closed",
+          "window_open": "Window open",
+          "off": "Off",
+          "no_sensor": "No room reading"
+        }
+      },
+      "trv_setpoint": {
+        "name": "TRV setpoint"
+      },
+      "trv_temperature": {
+        "name": "TRV temperature"
+      },
+      "error": {
+        "name": "Error (target − room)"
+      },
+      "p_term": {
+        "name": "Reaction now (P)"
+      },
+      "integral": {
+        "name": "Learned offset (I)"
+      }
+    },
+    "number": {
+      "night_temperature": {
+        "name": "Night temperature"
+      }
+    }
+  }
+}

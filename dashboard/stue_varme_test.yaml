@@ -1,0 +1,59 @@
+title: Varme
+views:
+  - title: "Stue Varme Test"
+    path: stue-varme-test
+    type: sections
+    max_columns: 3
+    sections:
+      - type: grid
+        cards:
+          - type: heading
+            heading: Lige nu
+          - type: thermostat
+            entity: climate.stue_varme_test
+          - type: markdown
+            content: "**{{ state_translated(\u0027sensor.stue_varme_test_status\u0027) }}**\n\n{{ state_attr(\u0027sensor.stue_varme_test_status\u0027, \u0027explanation\u0027) }}"
+          - type: tile
+            entity: sensor.stue_varme_test_trv_setpoint
+          - type: tile
+            entity: sensor.stue_varme_test_trv_temperature
+          - type: tile
+            entity: sensor.stue_varme_test_error
+          - type: tile
+            entity: sensor.stue_varme_test_integral
+          - type: tile
+            entity: number.stue_varme_test_night_temperature
+            name: Nattemperatur
+            features:
+              - type: numeric-input
+                style: buttons
+      - type: grid
+        column_span: 2
+        cards:
+          - type: heading
+            heading: Rummet
+          - type: history-graph
+            title: Rumtemperatur og mål (24 t)
+            hours_to_show: 24
+            entities:
+              - entity: climate.stue_varme_test
+          - type: history-graph
+            title: Hvad TRV'en får besked på (24 t)
+            hours_to_show: 24
+            entities:
+              - entity: sensor.stue_varme_test_trv_setpoint
+              - entity: sensor.stue_varme_test_trv_temperature
+          - type: history-graph
+            title: Regulatoren (48 t)
+            hours_to_show: 48
+            entities:
+              - entity: sensor.stue_varme_test_error
+              - entity: sensor.stue_varme_test_p_term
+              - entity: sensor.stue_varme_test_integral
+          - type: logbook
+            title: Hvad den har gjort
+            hours_to_show: 24
+            target:
+              entity_id:
+                - climate.stue_varme_test
+                - sensor.stue_varme_test_status

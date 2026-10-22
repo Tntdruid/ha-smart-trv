@@ -1,0 +1,5 @@
+reset_integral:
+  target:
+    entity:
+      integration: smart_trv
+      domain: climate
