@@ -13,7 +13,11 @@ COLD_RADIATOR_HOURS = 2.0
 
 
 def _c(value: float | None) -> str:
-    return "?" if value is None else f"{value:.1f}".replace(".", ",") + " °C"
+    if value is None:
+        return "?"
+    if abs(value) < 0.05:
+        value = 0.0  # no "-0,0"
+    return f"{value:.1f}".replace(".", ",") + " °C"
 
 
 def explain(diag: dict[str, Any], room: float | None, target: float | None) -> str:

@@ -10,7 +10,7 @@
  * so only the climate entity has to be given.
  */
 
-const CARD_VERSION = "0.3.0";
+const CARD_VERSION = "0.3.1";
 
 const TEXT = {
   da: {
@@ -27,6 +27,7 @@ const TEXT = {
     turnOn: "Tænd",
     turnOff: "Sluk",
     missing: "Entiteten findes ikke",
+    choose: "Vælg en Smart TRV i kortets indstillinger.",
     status: {
       heating: "Varmer",
       idle: "Ventil lukket",
@@ -49,6 +50,7 @@ const TEXT = {
     turnOn: "Turn on",
     turnOff: "Turn off",
     missing: "Entity not found",
+    choose: "Choose a Smart TRV in the card settings.",
     status: {
       heating: "Heating",
       idle: "Valve closed",
@@ -82,22 +84,46 @@ const DEBOUNCE_MS = 900;
 const HISTORY_REFRESH_MS = 10 * 60 * 1000;
 
 class SmartTrvCard extends HTMLElement {
-  static getConfigElement() {
-    return document.createElement("smart-trv-card-editor");
+  // HA's own form editor (no custom editor element to break).
+  static getConfigForm() {
+    return {
+      schema: [
+        {
+          name: "entity",
+          required: true,
+          selector: { entity: { filter: { integration: "smart_trv", domain: "climate" } } },
+        },
+        { name: "name", selector: { text: {} } },
+        { name: "show_graph", selector: { boolean: {} } },
+      ],
+      computeLabel: (schema) => {
+        const da = (document.documentElement.lang || "").toLowerCase().startsWith("da");
+        if (schema.name === "show_graph") return da ? "Vis graf (24 timer)" : "Show graph (24 h)";
+        return undefined; // HA's own label for entity/name
+      },
+    };
   }
 
+  // The card picker awaits this before it draws the preview: it must never throw.
   static getStubConfig(hass) {
-    const entity = Object.values(hass.entities || {}).find(
-      (e) => e.platform === "smart_trv" && e.entity_id.startsWith("climate."),
-    );
-    return { entity: entity ? entity.entity_id : "", show_graph: true };
+    let entity = "";
+    try {
+      const reg = (hass && hass.entities) || {};
+      entity =
+        Object.keys((hass && hass.states) || {}).find(
+          (id) => id.startsWith("climate.") && reg[id] && reg[id].platform === "smart_trv",
+        ) || "";
+    } catch (err) {
+      console.warn("smart-trv-card: getStubConfig", err);
+    }
+    return { entity, show_graph: true };
   }
 
   setConfig(config) {
-    if (!config || !config.entity || !config.entity.startsWith("climate.")) {
+    if (config && config.entity && !String(config.entity).startsWith("climate.")) {
       throw new Error("Choose a Smart TRV climate entity (entity: climate.xxx)");
     }
-    this._config = { show_graph: true, ...config };
+    this._config = { show_graph: true, ...(config || {}) };
     this._signature = undefined;
     this._history = undefined;
     this._historyAt = 0;
@@ -172,7 +198,8 @@ class SmartTrvCard extends HTMLElement {
   _fmt(value, digits = 1) {
     if (value === undefined || value === null || Number.isNaN(value)) return "–";
     const lang = this._hass.locale?.language || this._hass.language || "en";
-    return Number(value).toLocaleString(lang, {
+    const v = Math.abs(value) < 0.05 ? 0 : Number(value); // no "-0,0"
+    return v.toLocaleString(lang, {
       minimumFractionDigits: digits,
       maximumFractionDigits: digits,
     });
@@ -279,6 +306,10 @@ class SmartTrvCard extends HTMLElement {
     if (!this._config || !this._hass) return;
     if (!this.shadowRoot) this.attachShadow({ mode: "open" });
     const t = this._t;
+    if (!this._config.entity) {
+      this.shadowRoot.innerHTML = `${STYLE}<ha-card><div class="hint">🌡️ ${t.choose}</div></ha-card>`;
+      return;
+    }
     const climate = this._hass.states[this._config.entity];
     if (!climate) {
       this.shadowRoot.innerHTML = `${STYLE}<ha-card><div class="missing">${t.missing}: ${esc(
@@ -347,7 +378,7 @@ class SmartTrvCard extends HTMLElement {
                 .map(
                   ([label, v, id, unit, signed]) => `
               <button class="stat" data-more="${esc(id)}">
-                <div class="stat-value">${signed && v > 0 ? "+" : ""}${this._fmt(v)}${unit}</div>
+                <div class="stat-value">${signed && v >= 0.05 ? "+" : ""}${this._fmt(v)}${unit}</div>
                 <div class="label">${label}</div>
               </button>`,
                 )
@@ -441,40 +472,6 @@ class SmartTrvCard extends HTMLElement {
   }
 }
 
-class SmartTrvCardEditor extends HTMLElement {
-  setConfig(config) {
-    this._config = { show_graph: true, ...config };
-    this._render();
-  }
-
-  set hass(hass) {
-    this._hass = hass;
-    this._render();
-  }
-
-  _render() {
-    if (!this._hass || !this._config) return;
-    if (!this._form) {
-      this._form = document.createElement("ha-form");
-      this._form.computeLabel = (s) =>
-        ({ entity: "Smart TRV", name: "Navn / Name", show_graph: "Graf / Graph (24 h)" })[s.name];
-      this._form.addEventListener("value-changed", (ev) => {
-        const ce = new Event("config-changed", { bubbles: true, composed: true });
-        ce.detail = { config: ev.detail.value };
-        this.dispatchEvent(ce);
-      });
-      this.appendChild(this._form);
-    }
-    this._form.hass = this._hass;
-    this._form.data = this._config;
-    this._form.schema = [
-      { name: "entity", required: true, selector: { entity: { filter: { integration: "smart_trv", domain: "climate" } } } },
-      { name: "name", selector: { text: {} } },
-      { name: "show_graph", selector: { boolean: {} } },
-    ];
-  }
-}
-
 function esc(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 }
@@ -488,6 +485,7 @@ const STYLE = `<style>
   ha-card { padding: 16px; display: flex; flex-direction: column; gap: 14px; overflow: hidden; }
   button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
   .missing { color: var(--error-color, #db4437); }
+  .hint { color: var(--secondary-text-color); }
   .header { display: flex; align-items: center; gap: 8px; }
   .name { flex: 1; font-size: 1.1rem; font-weight: 500; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px;
@@ -543,7 +541,6 @@ const STYLE = `<style>
 
 if (!customElements.get("smart-trv-card")) {
   customElements.define("smart-trv-card", SmartTrvCard);
-  customElements.define("smart-trv-card-editor", SmartTrvCardEditor);
   window.customCards = window.customCards || [];
   window.customCards.push({
     type: "smart-trv-card",
