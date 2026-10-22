@@ -53,12 +53,8 @@ async def test_generates_view_per_room(hass: HomeAssistant, trv_calls) -> None: 
     assert not missing, missing
 
     stue = next(v for v in views if v["title"] == "Stue")
-    markdown = next(c for s in stue["sections"] for c in s["cards"] if c["type"] == "markdown")
-    assert markdown["content"] == (
-        "**{{ state_translated('sensor.stue_status') }}**\n\n"
-        "{{ state_attr('sensor.stue_status', 'explanation') }}"
-    )
-
+    card = next(c for s in stue["sections"] for c in s["cards"] if c["type"] == "custom:smart-trv-card")
+    assert card["entity"] == "climate.stue"
 
 
 async def test_users_room_name(hass: HomeAssistant, trv_calls) -> None:  # noqa: F811

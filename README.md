@@ -55,6 +55,29 @@ Brug den nye `climate.<navn>`-entitet i dit dashboard og dine automationer i ste
 
 Når planen er tændt, styrer rummet efter nattemperaturen, og forklaringen starter med 🌙. Termostatkortet viser altid det aktuelle mål. Drejer du på det om natten, ændrer du nattemperaturen, og om dagen ændrer du dagtemperaturen. Skiftet mellem dag og nat lærer ikke integralet noget forkert, fordi ventilen står helt lukket eller helt åben, mens rummet skifter temperatur.
 
+## Smart TRV-kortet
+
+Integrationen har sit eget dashboardkort, som den selv indlæser. Du skal ikke tilføje nogen ressource.
+
+Rediger dashboard → **Tilføj kort** → søg **"Smart TRV"** → vælg rummet. Eller i YAML:
+
+```yaml
+type: custom:smart-trv-card
+entity: climate.stue_varme_test
+show_graph: true   # 24 timers graf af rum vs. mål (valgfri)
+```
+
+Kortet viser:
+- Rumtemperatur og mål med −/+ (venter, til du holder op med at klikke, før det sender)
+- Status (Varmer, Ventil lukket, Vindue åbent, 🌙 nat) og tænd/sluk
+- TRV-setpunkt, hvad TRV'en måler, lært offset og afvigelse
+- Forklaringen i en sætning, med ⚠️-advarsler fremhævet
+- Nattemperatur med −/+
+
+Klik på en værdi for at se dens historik. Kortet finder selv rummets sensorer, så du skal kun vælge climate-entiteten.
+
+Preview uden Home Assistant: `python -m http.server` i repoet, og åbn `http://localhost:8000/tests/card_preview.html`.
+
 ## Se hvad den laver
 
 Integrationen laver sensorer, der kan vises som grafer (eksempel for "Stue"):

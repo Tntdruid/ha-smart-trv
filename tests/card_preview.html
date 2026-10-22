@@ -1,0 +1,102 @@
+<!doctype html>
+<!-- Preview of the Smart TRV card with a fake hass object. Open in a browser; no HA needed. -->
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Smart TRV card preview</title>
+<style>
+  body { margin: 0; font-family: Roboto, system-ui, sans-serif; }
+  .theme { padding: 16px; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+  .light { background: #fafafa; --primary-text-color: #212121; --secondary-text-color: #727272;
+           --card-background-color: #fff; --secondary-background-color: #f2f2f2; --primary-color: #03a9f4;
+           --divider-color: rgba(0,0,0,.12); color: #212121; }
+  .dark { background: #111; --primary-text-color: #e1e1e1; --secondary-text-color: #9b9b9b;
+          --card-background-color: #1c1c1c; --secondary-background-color: #2a2a2a; --primary-color: #03a9f4;
+          --divider-color: rgba(255,255,255,.12); color: #e1e1e1; }
+  h2 { grid-column: 1 / -1; margin: 0; font-size: 14px; font-weight: 500; opacity: .7; }
+  #log { font: 12px monospace; padding: 8px 16px; background: #222; color: #9f9; min-height: 40px; white-space: pre-wrap; }
+</style>
+<script>
+  // Minimal stand-in for HA's ha-card.
+  customElements.define("ha-card", class extends HTMLElement {
+    connectedCallback() {
+      Object.assign(this.style, {
+        display: "block", background: "var(--card-background-color)", borderRadius: "12px",
+        border: "1px solid var(--divider-color)", color: "var(--primary-text-color)",
+      });
+    }
+  });
+</script>
+<script src="../custom_components/smart_trv/frontend/smart-trv-card.js"></script>
+</head>
+<body>
+<div class="theme light" id="light"><h2>Lyst tema</h2></div>
+<div class="theme dark" id="dark"><h2>Mørkt tema</h2></div>
+<div id="log">Service calls:</div>
+<script>
+const DEV = "dev1";
+const reg = (id, platform = "smart_trv") => [id, { entity_id: id, device_id: DEV, platform }];
+const now = Date.now();
+
+function scenario({ room, target, night, nightTemp, status, explanation, trvSet, trvTemp, err, integral, hvac = "heat" }) {
+  const states = {
+    "climate.stue_varme_test": { state: hvac, last_updated: "1", attributes: {
+      friendly_name: "Stue Varme Test", current_temperature: room, temperature: target,
+      min_temp: 5, max_temp: 30, night_active: night } },
+    "sensor.stue_varme_test_status": { state: status, last_updated: "1", attributes: { explanation } },
+    "sensor.stue_varme_test_trv_setpoint": { state: String(trvSet), last_updated: "1", attributes: {} },
+    "sensor.stue_varme_test_trv_temperature": { state: String(trvTemp), last_updated: "1", attributes: {} },
+    "sensor.stue_varme_test_error": { state: String(err), last_updated: "1", attributes: {} },
+    "sensor.stue_varme_test_integral": { state: String(integral), last_updated: "1", attributes: {} },
+    "number.stue_varme_test_night_temperature": { state: String(nightTemp), last_updated: "1", attributes: {} },
+  };
+  return states;
+}
+
+function history(base, target) {
+  const rows = [];
+  for (let i = 0; i <= 96; i++) {
+    const t = now - (96 - i) * 15 * 60 * 1000;
+    const h = new Date(t).getHours();
+    const tgt = h >= 22 || h < 6 ? 19 : target;
+    rows.push({ s: "heat", lu: t / 1000, a: { current_temperature: +(base + Math.sin(i / 9) * 0.35 + (tgt - target) * 0.4).toFixed(2), temperature: tgt } });
+  }
+  return rows;
+}
+
+const SCENARIOS = [
+  scenario({ room: 21.8, target: 22.5, night: false, nightTemp: 19, status: "heating", trvSet: 24.5, trvTemp: 23.1, err: 0.7, integral: 0.9,
+    explanation: "Rummet er 0,7 °C under målet (21,8 °C af 22,5 °C). TRV sat til 24,5 °C, TRV'en måler 23,1 °C, så ventilen er åben. Lært offset 0,9 °C + reaktion nu 2,1 °C." }),
+  scenario({ room: 19.4, target: 19, night: true, nightTemp: 19, status: "idle", trvSet: 18.0, trvTemp: 20.2, err: -0.4, integral: 0.6,
+    explanation: "🌙 Nattemperatur. Rummet er 0,4 °C over målet (19,4 °C af 19,0 °C). TRV sat til 18,0 °C, TRV'en måler 20,2 °C, så ventilen er lukket. Lært offset 0,6 °C + reaktion nu -1,2 °C." }),
+  scenario({ room: 21.4, target: 22, night: false, nightTemp: 18.5, status: "heating", trvSet: 26.0, trvTemp: 21.0, err: 0.6, integral: 0.0,
+    explanation: "Rummet er 0,6 °C under målet (21,4 °C af 22,0 °C). TRV sat til 26,0 °C, TRV'en måler 21,0 °C, så ventilen er åben. Lært offset 0,0 °C + reaktion nu 1,8 °C. ⚠️ TRV'en har været helt åben i 3,5 t, men måler stadig kun 21,0 °C: radiatoren bliver ikke varm. Tjek fremløbstemperatur/natsænkning på fyr eller fjernvarme, luft i radiatoren, og at TV02 trykker ventilstiften helt." }),
+];
+
+const log = (m) => (document.getElementById("log").textContent += "\n" + m);
+
+function makeHass(states) {
+  return {
+    states,
+    entities: Object.fromEntries(Object.keys(states).map((id) => reg(id)[1]).map((e) => [e.entity_id, e])),
+    locale: { language: "da" },
+    language: "da",
+    callWS: async () => ({ "climate.stue_varme_test": history(states["climate.stue_varme_test"].attributes.current_temperature, states["climate.stue_varme_test"].attributes.temperature) }),
+    callService: async (d, s, data) => log(`${d}.${s} ${JSON.stringify(data)}`),
+  };
+}
+
+window.cards = [];
+for (const theme of ["light", "dark"]) {
+  SCENARIOS.forEach((states) => {
+    const card = document.createElement("smart-trv-card");
+    card.setConfig({ entity: "climate.stue_varme_test" });
+    card.hass = makeHass(structuredClone(states));
+    document.getElementById(theme).appendChild(card);
+    window.cards.push(card);
+  });
+}
+</script>
+</body>
+</html>

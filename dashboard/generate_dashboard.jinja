@@ -16,7 +16,6 @@ views:
 {%- set s_err = ents | select('search', '_error$') | first %}
 {%- set s_p = ents | select('search', '_p_term$') | first %}
 {%- set s_i = ents | select('search', '_integral$') | first %}
-{%- set n_night = device_entities(device_id(c)) | select('search', '^number[.].*_night_temperature$') | first %}
   - title: {{ (state_attr(c, 'friendly_name') or c) | tojson }}
     path: {{ c.split('.')[1] | replace('_', '-') }}
     type: sections
@@ -26,24 +25,9 @@ views:
         cards:
           - type: heading
             heading: Lige nu
-          - type: thermostat
+          - type: custom:smart-trv-card
             entity: {{ c }}
-{%- if s_status %}
-          - type: markdown
-            content: {{ ("**{{ state_translated('" ~ s_status ~ "') }}**\n\n{{ state_attr('" ~ s_status ~ "', 'explanation') }}") | tojson }}
-{%- endif %}
-{%- for s in [s_set, s_trv, s_err, s_i] if s %}
-          - type: tile
-            entity: {{ s }}
-{%- endfor %}
-{%- if n_night %}
-          - type: tile
-            entity: {{ n_night }}
-            name: Nattemperatur
-            features:
-              - type: numeric-input
-                style: buttons
-{%- endif %}
+            show_graph: false
       - type: grid
         column_span: 2
         cards:
