@@ -1,3 +1,5 @@
+<img src="custom_components/smart_trv/brand/icon@2x.png" alt="Smart TRV" width="128" align="right">
+
 # Smart TRV (PI) – Home Assistant
 
 Styrer radiatortermostater (testet mod modellen af Tuya **TV02-Zigbee** via Zigbee2MQTT) ud fra en **rumsensor** med en PI-regulator.
