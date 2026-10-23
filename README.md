@@ -21,6 +21,17 @@ TV02 kan ikke styres med ventilåbning i %, kun med et setpunkt. Integrationen r
 
 Integralet lærer højst med 0,3 °C afvigelse ad gangen. Store afvigelser, fx efter udluftning, klares af P-leddet, så integralet ikke "pumper sig op" og giver overshoot om eftermiddagen.
 
+## Understøttede TRV'er
+
+Alle TRV'er, der i Home Assistant er en `climate`-entitet med setpunkt og egen temperaturmåling. Testet mod:
+
+| | Sluk ved åbent vindue | "Varmer"-status | Bemærk |
+|---|---|---|---|
+| Tuya **TV02** | `hvac_mode: off` | gættes ud fra setpunkt og TRV'ens måling | kun 0,5 °C-trin |
+| Tuya **TRV602** | preset `off` (den har ingen hvac off) | fra TRV'ens `running_state` | sæt `mode` til **comfort** i Z2M: `eco` åbner/lukker kun helt, og så kan PI-reguleringen ikke finjustere |
+
+Har en TRV hverken hvac off eller preset off, sætter Smart TRV den til laveste setpunkt, mens vinduet er åbent.
+
 ## Installation
 
 1. Kopiér mappen `custom_components/smart_trv` til `/config/custom_components/smart_trv` i Home Assistant.

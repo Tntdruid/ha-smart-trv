@@ -9,6 +9,8 @@ from typing import Any
 from homeassistant.components.climate import (
     ATTR_CURRENT_TEMPERATURE,
     ATTR_HVAC_ACTION,
+    ATTR_HVAC_MODES,
+    ATTR_MIN_TEMP,
     ATTR_PRESET_MODE,
     ATTR_PRESET_MODES,
     ClimateEntity,
@@ -242,10 +244,13 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
             if state is None or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
                 continue
 
-            if state.state != HVACMode.HEAT:
+            # Some TRVs (e.g. Tuya TRV602) have no hvac modes to set, only presets.
+            modes = state.attributes.get(ATTR_HVAC_MODES) or [HVACMode.HEAT, HVACMode.OFF]
+            if HVACMode.HEAT in modes and state.state != HVACMode.HEAT:
                 await self._call("set_hvac_mode", trv, hvac_mode=HVACMode.HEAT)
 
-            # TV02 in "auto" follows its own schedule and overrides us.
+            # "auto" follows the TRV's own schedule and overrides us; "manual" also leaves
+            # a preset "off" used while a window was open.
             presets = state.attributes.get(ATTR_PRESET_MODES) or []
             if "manual" in presets and state.attributes.get(ATTR_PRESET_MODE) != "manual":
                 await self._call("set_preset_mode", trv, preset_mode="manual")
@@ -264,8 +269,19 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
             return
         for trv in self._trvs:
             state = self.hass.states.get(trv)
-            if state is not None and state.state not in (HVACMode.OFF, STATE_UNAVAILABLE):
+            if state is None or state.state in (HVACMode.OFF, STATE_UNAVAILABLE, STATE_UNKNOWN):
+                continue
+            # Use whatever "off" the TRV has: hvac mode (TV02), preset (TRV602), or lowest setpoint.
+            modes = state.attributes.get(ATTR_HVAC_MODES) or [HVACMode.HEAT, HVACMode.OFF]
+            presets = state.attributes.get(ATTR_PRESET_MODES) or []
+            if HVACMode.OFF in modes:
                 await self._call("set_hvac_mode", trv, hvac_mode=HVACMode.OFF)
+            elif "off" in presets:
+                if state.attributes.get(ATTR_PRESET_MODE) != "off":
+                    await self._call("set_preset_mode", trv, preset_mode="off")
+            else:
+                low = state.attributes.get(ATTR_MIN_TEMP, TRV_MIN_TEMP)
+                await self._call("set_temperature", trv, temperature=low)
         self._last_sent.clear()
         self._trvs_off = True
 
