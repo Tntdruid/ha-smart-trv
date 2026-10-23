@@ -119,6 +119,7 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
             max_boost=conf.get(CONF_MAX_BOOST, DEFAULT_MAX_BOOST),
             max_cut=conf.get(CONF_MAX_CUT, DEFAULT_MAX_CUT),
             step=conf.get(CONF_TRV_STEP, DEFAULT_TRV_STEP),
+            hysteresis=conf.get(CONF_TRV_STEP, DEFAULT_TRV_STEP),
             min_temp=TRV_MIN_TEMP,
             max_temp=TRV_MAX_TEMP,
         )
@@ -179,8 +180,12 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
     @callback
     def _async_input_changed(self, event: Event[EventStateChangedData]) -> None:
         if event.data["entity_id"] == self._room_sensor:
+            # Only show the new reading; the controller runs on the timer. Running it on every
+            # sensor update made the TRV motor move every few minutes.
             self._attr_current_temperature = self._read_float(self._room_sensor)
-        self.hass.async_create_task(self._async_control())
+            self._publish()
+            return
+        self.hass.async_create_task(self._async_control())  # window or night changed: act now
 
     @callback
     def _async_settings_changed(self) -> None:
@@ -283,6 +288,7 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
                 low = state.attributes.get(ATTR_MIN_TEMP, TRV_MIN_TEMP)
                 await self._call("set_temperature", trv, temperature=low)
         self._last_sent.clear()
+        self._pi.output = None  # start from a fresh setpoint when heating resumes
         self._trvs_off = True
 
     async def _call(self, service: str, entity_id: str, **data: Any) -> None:
@@ -428,5 +434,6 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
 
     async def async_reset_integral(self) -> None:
         self._pi.integral = 0.0
+        self._pi.output = None
         self._seeded = False
         await self._async_control()

@@ -31,9 +31,13 @@ class PIController:
     # already fully open (or closed). Moving the setpoint further changes nothing, so
     # don't learn from it: that's how a cold radiator at night winds up the integral.
     valve_margin: float = 1.0
+    # Keep the last setpoint until the new one is at least this far away. Without it, sensor
+    # noise flips the setpoint between two steps and the TRV motor runs every few minutes.
+    hysteresis: float = 0.0
     integral: float = 0.0
     error: float = 0.0
     valve_saturated: bool = False
+    output: float | None = None
 
     def seed(self, trv_temp: float | None, room_temp: float) -> None:
         """Start the integral at the TRV/room sensor difference (what BT would use)."""
@@ -73,7 +77,9 @@ class PIController:
 
         offset = self._clamp(p + self.integral, -self.max_cut, self.max_boost)
         setpoint = self._clamp(target + offset, self.min_temp, self.max_temp)
-        return round(round(setpoint / self.step) * self.step, 2)
+        if self.output is None or abs(setpoint - self.output) >= self.hysteresis:
+            self.output = round(round(setpoint / self.step) * self.step, 2)
+        return self.output
 
     @staticmethod
     def _clamp(value: float, low: float, high: float) -> float:

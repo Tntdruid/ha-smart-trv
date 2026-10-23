@@ -56,7 +56,7 @@ Brug den nye `climate.<navn>`-entitet i dit dashboard og dine automationer i ste
 | Max boost | 6 °C | Hvor langt over målet TRV-setpunktet må gå |
 | Max sænkning | 3 °C | Hvor langt under målet TRV-setpunktet må gå |
 | TRV-trin | 0,5 °C | TV02 tager kun halve grader |
-| Interval | 5 min | Hvor tit der reguleres. Der sendes kun Zigbee-kommandoer, når setpunktet faktisk ændrer sig (sparer batteri) |
+| Interval | 5 min | Hvor tit der reguleres. Nye målinger fra rumsensoren vises med det samme, men TRV'en får kun nyt setpunkt ved reguleringen, og kun når det er flyttet mindst ét TRV-trin. Det holder motoren i ro: ca. 20 ændringer i døgnet i stedet for flere hundrede (`python tests/simulate_chatter.py`) |
 
 ## Nattemperatur pr. rum
 

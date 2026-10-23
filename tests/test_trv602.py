@@ -75,3 +75,33 @@ async def test_status_trusts_running_state(hass: HomeAssistant, trv_calls) -> No
     set_trv602(hass, preset="manual", action="heating", local=21.0)
     await hass.async_block_till_done()
     assert hass.states.get("sensor.stue_status").state == "heating"
+
+
+async def test_sensor_noise_does_not_move_the_valve(hass: HomeAssistant, trv_calls, freezer) -> None:  # noqa: F811
+    """The 'opens and closes all the time' report: noisy room readings must not chatter the TRV."""
+    import random
+    from datetime import timedelta
+
+    from homeassistant.util import dt as dt_util
+    from pytest_homeassistant_custom_component.common import async_fire_time_changed
+
+    await setup_trv602(hass, preset="manual", local=22.5, setpoint=23.0)
+    rnd = random.Random(3)
+
+    # Readings between control runs only update the display.
+    sent_before = sum(1 for s, _, _ in trv_calls if s == "set_temperature")
+    for _ in range(20):
+        hass.states.async_set("sensor.stue_temperatur", f"{21.95 + rnd.uniform(-0.1, 0.1):.2f}")
+        await hass.async_block_till_done()
+    assert sum(1 for s, _, _ in trv_calls if s == "set_temperature") == sent_before
+
+    # 6 hours of noisy readings every minute, controller on its 5 min timer.
+    setpoints = []
+    for minute in range(6 * 60):
+        freezer.tick(timedelta(minutes=1))
+        hass.states.async_set("sensor.stue_temperatur", f"{21.95 + rnd.uniform(-0.1, 0.1):.2f}")
+        async_fire_time_changed(hass, dt_util.utcnow())
+        await hass.async_block_till_done()
+        setpoints.append(hass.states.get(ENTITY).attributes["trv_setpoint"])
+    changes = sum(1 for a, b in zip(setpoints, setpoints[1:]) if a != b)
+    assert changes <= 6, f"TRV setpoint changed {changes} times in 6 h"
