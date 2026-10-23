@@ -14,7 +14,9 @@
           "max_cut": "Max TRV cut below target",
           "trv_step": "TRV setpoint step",
           "interval": "Control interval",
-          "night_entity": "Night schedule"
+          "night_entity": "Night schedule",
+          "window_open_delay": "Turn off after open (s)",
+          "window_close_delay": "Back on after closed (s)"
         },
         "data_description": {
           "room_sensor": "The sensor that measures the temperature you actually care about.",
@@ -22,7 +24,9 @@
           "ki": "How fast to learn the remaining offset (°C per °C·hour). Higher removes the last 0.5 °C faster but can overshoot. Default 1.0.",
           "max_boost": "How far above your target the TRV setpoint may go to push heat in.",
           "trv_step": "TV02 accepts 0.5 °C steps.",
-          "night_entity": "A schedule, input_boolean or binary_sensor. While it is on, the room uses its night temperature (set on the device page or the dashboard)."
+          "night_entity": "A schedule, input_boolean or binary_sensor. While it is on, the room uses its night temperature (set on the device page or the dashboard).",
+          "window_open_delay": "How long a window or door must stay open before the TRVs turn off. Walking through a door shouldn't turn the heating off. Default 60.",
+          "window_close_delay": "How long it must stay closed before heating resumes. Default 0."
         }
       }
     }
@@ -41,7 +45,9 @@
           "max_cut": "Max TRV cut below target",
           "trv_step": "TRV setpoint step",
           "interval": "Control interval",
-          "night_entity": "Night schedule"
+          "night_entity": "Night schedule",
+          "window_open_delay": "Turn off after open (s)",
+          "window_close_delay": "Back on after closed (s)"
         },
         "data_description": {
           "room_sensor": "The sensor that measures the temperature you actually care about.",
@@ -49,7 +55,9 @@
           "ki": "How fast to learn the remaining offset (°C per °C·hour). Higher removes the last 0.5 °C faster but can overshoot. Default 1.0.",
           "max_boost": "How far above your target the TRV setpoint may go to push heat in.",
           "trv_step": "TV02 accepts 0.5 °C steps.",
-          "night_entity": "A schedule, input_boolean or binary_sensor. While it is on, the room uses its night temperature (set on the device page or the dashboard)."
+          "night_entity": "A schedule, input_boolean or binary_sensor. While it is on, the room uses its night temperature (set on the device page or the dashboard).",
+          "window_open_delay": "How long a window or door must stay open before the TRVs turn off. Walking through a door shouldn't turn the heating off. Default 60.",
+          "window_close_delay": "How long it must stay closed before heating resumes. Default 0."
         }
       }
     }

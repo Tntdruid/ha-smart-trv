@@ -25,7 +25,10 @@ def explain(diag: dict[str, Any], room: float | None, target: float | None) -> s
     if status == STATUS_OFF:
         return "Slukket. TRV'erne er slukket."
     if status == STATUS_WINDOW:
-        return "Vindue åbent. TRV'erne er slukket, og læringen står på pause."
+        text = "Vindue åbent. TRV'erne er slukket, og læringen står på pause."
+        if diag.get("window_pending") == "on":
+            text += f" Lukket igen: varmen starter om {diag.get('window_seconds_left')} sek."
+        return text
     if status == STATUS_NO_SENSOR:
         return "Ingen måling fra rumsensoren. TRV'erne beholder sidste setpunkt."
 
@@ -46,8 +49,15 @@ def explain(diag: dict[str, Any], room: float | None, target: float | None) -> s
         if len(per_trv) > 1
         else f"TRV'en måler {_c(diag['trv_temperature'])}"
     )
+    pending = ""
+    if diag.get("window_pending") == "off":
+        pending = (
+            f"🪟 Vindue/dør åben: slukker om {diag.get('window_seconds_left')} sek., "
+            "hvis den bliver ved med at stå åben. "
+        )
     text = (
-        ("🌙 Nattemperatur. " if diag.get("night_active") else "")
+        pending
+        + ("🌙 Nattemperatur. " if diag.get("night_active") else "")
         + f"{where}. TRV sat til {_c(diag['trv_setpoint'])}, {reads}, så {valve}. "
         f"Lært offset {_c(diag['integral'])} + reaktion nu {_c(diag['p_term'])}."
     )

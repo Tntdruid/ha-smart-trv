@@ -14,7 +14,9 @@
           "max_cut": "Max TRV-sænkning under mål",
           "trv_step": "TRV-trin",
           "interval": "Reguleringsinterval",
-          "night_entity": "Natplan"
+          "night_entity": "Natplan",
+          "window_open_delay": "Sluk efter åben (sek.)",
+          "window_close_delay": "Tænd igen efter lukket (sek.)"
         },
         "data_description": {
           "room_sensor": "Sensoren der måler den temperatur, du faktisk vil styre efter.",
@@ -22,7 +24,9 @@
           "ki": "Hvor hurtigt den resterende afvigelse læres (°C pr. °C·time). Højere fjerner de sidste 0,5 °C hurtigere, men kan give overshoot. Standard 1,0.",
           "max_boost": "Hvor langt over målet TRV'ens setpunkt må gå for at presse varme ind.",
           "trv_step": "TV02 tager 0,5 °C trin.",
-          "night_entity": "En tidsplan (schedule), input_boolean eller binary_sensor. Når den er tændt, bruger rummet sin nattemperatur (indstilles på enhedssiden eller dashboardet)."
+          "night_entity": "En tidsplan (schedule), input_boolean eller binary_sensor. Når den er tændt, bruger rummet sin nattemperatur (indstilles på enhedssiden eller dashboardet).",
+          "window_open_delay": "Hvor længe et vindue eller en dør skal stå åben, før TRV'erne slukkes. En dør, man går igennem, skal ikke slukke varmen. Standard 60.",
+          "window_close_delay": "Hvor længe der skal være lukket, før varmen starter igen. Standard 0."
         }
       }
     }
@@ -41,7 +45,9 @@
           "max_cut": "Max TRV-sænkning under mål",
           "trv_step": "TRV-trin",
           "interval": "Reguleringsinterval",
-          "night_entity": "Natplan"
+          "night_entity": "Natplan",
+          "window_open_delay": "Sluk efter åben (sek.)",
+          "window_close_delay": "Tænd igen efter lukket (sek.)"
         },
         "data_description": {
           "room_sensor": "Sensoren der måler den temperatur, du faktisk vil styre efter.",
@@ -49,7 +55,9 @@
           "ki": "Hvor hurtigt den resterende afvigelse læres (°C pr. °C·time). Højere fjerner de sidste 0,5 °C hurtigere, men kan give overshoot. Standard 1,0.",
           "max_boost": "Hvor langt over målet TRV'ens setpunkt må gå for at presse varme ind.",
           "trv_step": "TV02 tager 0,5 °C trin.",
-          "night_entity": "En tidsplan (schedule), input_boolean eller binary_sensor. Når den er tændt, bruger rummet sin nattemperatur (indstilles på enhedssiden eller dashboardet)."
+          "night_entity": "En tidsplan (schedule), input_boolean eller binary_sensor. Når den er tændt, bruger rummet sin nattemperatur (indstilles på enhedssiden eller dashboardet).",
+          "window_open_delay": "Hvor længe et vindue eller en dør skal stå åben, før TRV'erne slukkes. En dør, man går igennem, skal ikke slukke varmen. Standard 60.",
+          "window_close_delay": "Hvor længe der skal være lukket, før varmen starter igen. Standard 0."
         }
       }
     }

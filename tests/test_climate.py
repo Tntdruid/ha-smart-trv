@@ -17,6 +17,8 @@ USER_INPUT = {
     "max_cut": 3.0,
     "trv_step": 0.5,
     "interval": 5,
+    "window_open_delay": 0,  # react at once in these tests; delays are in test_window_delay.py
+    "window_close_delay": 0,
 }
 ENTITY = "climate.stue"
 

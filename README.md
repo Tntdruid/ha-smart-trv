@@ -60,6 +60,17 @@ Brug den nye `climate.<navn>`-entitet i dit dashboard og dine automationer i ste
 | TRV-trin | 0,5 °C | TV02 tager kun halve grader |
 | Interval | 5 min | Hvor tit der reguleres. Nye målinger fra rumsensoren vises med det samme, men TRV'en får kun nyt setpunkt ved reguleringen, og kun når det er flyttet mindst ét TRV-trin. Det holder motoren i ro: ca. 20 ændringer i døgnet i stedet for flere hundrede (`python tests/simulate_chatter.py`) |
 
+## Vinduer og døre
+
+Vælg vindues- og dørsensorer under **Konfigurer**. Så slukker Smart TRV TRV'erne, mens der er åbent, og læringen står på pause imens. To timere pr. rum:
+
+| Felt | Standard | Betydning |
+|---|---|---|
+| Sluk efter åben | 60 sek. | Hvor længe der skal være åbent, før TRV'erne slukkes. En dør, man går igennem, slukker ikke varmen |
+| Tænd igen efter lukket | 0 sek. | Hvor længe der skal være lukket, før varmen starter igen |
+
+Mens timeren kører, står der fx "🪟 Vindue/dør åben: slukker om 45 sek." i forklaringen. Står vinduet allerede åbent, når Home Assistant starter, slukkes der med det samme.
+
 ## Nattemperatur pr. rum
 
 1. Lav en tidsplan i Home Assistant (Indstillinger → Enheder og tjenester → Hjælpere → Tidsplan), fx `schedule.christian_nat_varme`, der er **tændt om natten**. Flere rum kan godt dele samme plan.

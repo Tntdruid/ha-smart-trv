@@ -28,12 +28,22 @@ from homeassistant.const import (
     STATE_UNKNOWN,
     UnitOfTemperature,
 )
-from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
+from homeassistant.core import (
+    CALLBACK_TYPE,
+    Event,
+    EventStateChangedData,
+    HomeAssistant,
+    callback,
+)
 from homeassistant.helpers import entity_platform
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.event import async_track_state_change_event, async_track_time_interval
+from homeassistant.helpers.event import (
+    async_call_later,
+    async_track_state_change_event,
+    async_track_time_interval,
+)
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.util import dt as dt_util
 
@@ -51,6 +61,8 @@ from .const import (
     CONF_ROOM_SENSOR,
     CONF_TRV_STEP,
     CONF_TRVS,
+    CONF_WINDOW_CLOSE_DELAY,
+    CONF_WINDOW_OPEN_DELAY,
     CONF_WINDOWS,
     DEFAULT_INTERVAL,
     DEFAULT_KI,
@@ -58,6 +70,8 @@ from .const import (
     DEFAULT_MAX_BOOST,
     DEFAULT_MAX_CUT,
     DEFAULT_TRV_STEP,
+    DEFAULT_WINDOW_CLOSE_DELAY,
+    DEFAULT_WINDOW_OPEN_DELAY,
     DOMAIN,
     SIGNAL_SETTINGS,
     SIGNAL_UPDATE,
@@ -112,6 +126,13 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
         self._trvs: list[str] = list(conf[CONF_TRVS])
         self._windows: list[str] = list(conf.get(CONF_WINDOWS, []))
         self._night_entity: str | None = conf.get(CONF_NIGHT_ENTITY)
+        self._open_delay = float(conf.get(CONF_WINDOW_OPEN_DELAY, DEFAULT_WINDOW_OPEN_DELAY))
+        self._close_delay = float(conf.get(CONF_WINDOW_CLOSE_DELAY, DEFAULT_WINDOW_CLOSE_DELAY))
+        # Heating goes off for an open window only after the open delay, back on after the close delay.
+        self._window_off = False
+        self._window_timer: CALLBACK_TYPE | None = None
+        self._window_pending: str | None = None  # "off" or "on" while a delay runs
+        self._window_deadline: datetime | None = None
         self._interval = timedelta(minutes=conf.get(CONF_INTERVAL, DEFAULT_INTERVAL))
         self._pi = PIController(
             kp=conf.get(CONF_KP, DEFAULT_KP),
@@ -156,6 +177,8 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
                 self._seeded = True
 
         self._attr_current_temperature = self._read_float(self._room_sensor)
+        self._window_off = self._any_window_open()  # already open at startup: no delay
+        self.async_on_remove(self._cancel_window_timer)
 
         self.async_on_remove(
             async_track_state_change_event(
@@ -187,7 +210,46 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
             self._attr_current_temperature = self._read_float(self._room_sensor)
             self._publish()
             return
-        self.hass.async_create_task(self._async_control())  # window or night changed: act now
+        if event.data["entity_id"] in self._windows:
+            self._async_window_changed()
+            return
+        self.hass.async_create_task(self._async_control())  # night changed: act now
+
+    @callback
+    def _async_window_changed(self) -> None:
+        open_now = self._any_window_open()
+        self._cancel_window_timer()
+        if open_now == self._window_off:
+            self._publish()  # e.g. the door closed again before the open delay ran out
+            return
+        delay = self._open_delay if open_now else self._close_delay
+        if delay <= 0:
+            self._apply_window(open_now)
+            return
+        self._window_pending = "off" if open_now else "on"
+        self._window_deadline = dt_util.utcnow() + timedelta(seconds=delay)
+        self._window_timer = async_call_later(self.hass, delay, self._async_window_timer_done)
+        self._publish()
+
+    @callback
+    def _async_window_timer_done(self, _now: datetime) -> None:
+        self._window_timer = None
+        self._apply_window(self._any_window_open())
+
+    @callback
+    def _apply_window(self, open_: bool) -> None:
+        self._window_pending = None
+        self._window_deadline = None
+        self._window_off = open_
+        self.hass.async_create_task(self._async_control())
+
+    @callback
+    def _cancel_window_timer(self) -> None:
+        if self._window_timer is not None:
+            self._window_timer()
+            self._window_timer = None
+        self._window_pending = None
+        self._window_deadline = None
 
     @callback
     def _async_settings_changed(self) -> None:
@@ -332,6 +394,12 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
             "trv_temperature": trv_temp,
             "trv_temperatures": self._trv_temperatures(),
             "rejected": dict(self._rejected),
+            "window_pending": self._window_pending,
+            "window_seconds_left": (
+                max(0, round((self._window_deadline - dt_util.utcnow()).total_seconds()))
+                if self._window_deadline
+                else None
+            ),
             "error": round(self._pi.error, 2),
             "p_term": round(self._pi.kp * self._pi.error, 2),
             "integral": round(self._pi.integral, 2),
@@ -359,6 +427,10 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
 
     @property
     def _window_open(self) -> bool:
+        """Whether heating is off for an open window (after the open delay)."""
+        return self._window_off
+
+    def _any_window_open(self) -> bool:
         return any(
             (s := self.hass.states.get(w)) is not None and s.state == STATE_ON
             for w in self._windows

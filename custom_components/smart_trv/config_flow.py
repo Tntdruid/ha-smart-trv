@@ -21,6 +21,8 @@ from .const import (
     CONF_ROOM_SENSOR,
     CONF_TRV_STEP,
     CONF_TRVS,
+    CONF_WINDOW_CLOSE_DELAY,
+    CONF_WINDOW_OPEN_DELAY,
     CONF_WINDOWS,
     DEFAULT_INTERVAL,
     DEFAULT_KI,
@@ -29,6 +31,8 @@ from .const import (
     DEFAULT_MAX_CUT,
     DEFAULT_NAME,
     DEFAULT_TRV_STEP,
+    DEFAULT_WINDOW_CLOSE_DELAY,
+    DEFAULT_WINDOW_OPEN_DELAY,
     DOMAIN,
 )
 
@@ -54,6 +58,14 @@ def _entities_schema(defaults: dict[str, Any]) -> dict:
             selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="binary_sensor", multiple=True)
             ),
+        vol.Required(
+            CONF_WINDOW_OPEN_DELAY,
+            default=defaults.get(CONF_WINDOW_OPEN_DELAY, DEFAULT_WINDOW_OPEN_DELAY),
+        ): _number(0, 1800, 5, "s"),
+        vol.Required(
+            CONF_WINDOW_CLOSE_DELAY,
+            default=defaults.get(CONF_WINDOW_CLOSE_DELAY, DEFAULT_WINDOW_CLOSE_DELAY),
+        ): _number(0, 1800, 5, "s"),
         # suggested_value, not default: the field must be clearable in the options flow.
         vol.Optional(
             CONF_NIGHT_ENTITY, description={"suggested_value": defaults.get(CONF_NIGHT_ENTITY)}
