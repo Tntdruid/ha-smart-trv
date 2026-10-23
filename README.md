@@ -156,10 +156,3 @@ Du får én fane pr. Smart TRV-rum, uanset hvad du har kaldt dem. Hver fane vise
 Tjenesten `smart_trv.reset_integral` nulstiller det lærte offset, fx hvis du flytter rumsensoren.
 
 **Tuning:** svinger rummet op og ned, så sænk Ki (fx 0,5). Tager det for lang tid at nå målet, så hæv Ki eller Kp lidt. Det lærte integral gemmes ved genstart.
-
-## Vil du hellere blive på Better Thermostat?
-
-Prøv først det her:
-- Kalibreringstype **"Target Temperature Based"** og kalibreringstilstand **"Aggressive"** (eller "AI Time Based").
-- Tjek, at **tolerance** står på 0.
-- Den faste restafvigelse forsvinder dog ikke helt, fordi BT ikke har et integralled.
