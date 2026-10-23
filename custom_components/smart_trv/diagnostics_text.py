@@ -66,6 +66,12 @@ def explain(diag: dict[str, Any], room: float | None, target: float | None) -> s
             "fremløbstemperatur/natsænkning på fyr eller fjernvarme, luft i radiatoren, "
             "og at TV02 trykker ventilstiften helt."
         )
+    for trv_id, (sent, reported) in (diag.get("rejected") or {}).items():
+        text += (
+            f" ⚠️ {trv_id} står stadig på {_c(reported)}, selvom Smart TRV har sendt {_c(sent)}. "
+            "TRV'en tager ikke imod setpunktet. Tjek dens max_temperature i Zigbee2MQTT "
+            "(sæt den til 35 °C) og at den står i preset manual."
+        )
     if trv is not None and room is not None and room - trv >= CALIBRATION_WARN_DELTA:
         text += (
             f" ⚠️ TRV'en måler {_c(room - trv)} koldere end rummet. Det er næsten altid en "

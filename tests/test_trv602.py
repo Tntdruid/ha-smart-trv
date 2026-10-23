@@ -105,3 +105,41 @@ async def test_sensor_noise_does_not_move_the_valve(hass: HomeAssistant, trv_cal
         setpoints.append(hass.states.get(ENTITY).attributes["trv_setpoint"])
     changes = sum(1 for a, b in zip(setpoints, setpoints[1:]) if a != b)
     assert changes <= 6, f"TRV setpoint changed {changes} times in 6 h"
+
+
+async def test_warns_when_trv_refuses_setpoint(hass: HomeAssistant, trv_calls, freezer) -> None:  # noqa: F811
+    """The user's TRV602 had max_temperature 23 and stayed on 22 while Smart TRV sent 23.5."""
+    from datetime import timedelta
+
+    from homeassistant.util import dt as dt_util
+    from pytest_homeassistant_custom_component.common import async_fire_time_changed
+
+    # No hvac_action reported, so status is guessed from the setpoints.
+    hass.states.async_set("sensor.stue_temperatur", "21.2")
+    hass.states.async_set("binary_sensor.stue_vindue", "off")
+    set_trv602(hass, preset="manual", local=21.6, setpoint=22.0)
+    hass.states.async_set(TRV, "heat", {**hass.states.get(TRV).attributes, "hvac_action": None})
+    entry = MockConfigEntry(domain="smart_trv", data=USER_INPUT | {"trvs": [TRV]})
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    await hass.services.async_call(
+        "climate", "set_temperature", {"entity_id": ENTITY, "temperature": 22}, blocking=True
+    )
+    await hass.async_block_till_done()
+    assert hass.states.get(ENTITY).attributes["trv_setpoint"] > 23  # what we want
+
+    for _ in range(4):  # 20 min: past the 10 min resend; the TRV keeps reporting 22
+        freezer.tick(timedelta(minutes=5))
+        async_fire_time_changed(hass, dt_util.utcnow())
+        await hass.async_block_till_done()
+
+    explanation = hass.states.get("sensor.stue_status").attributes["explanation"]
+    assert f"{TRV} står stadig på 22,0 °C" in explanation
+    assert "max_temperature" in explanation
+    # Status guess must use the setpoint the TRV really has (22), not the refused 23.5+:
+    # reading 22.1 above 22 means its valve is closed.
+    set_trv602(hass, preset="manual", local=22.1, setpoint=22.0)
+    hass.states.async_set(TRV, "heat", {**hass.states.get(TRV).attributes, "hvac_action": None})
+    await hass.async_block_till_done()
+    assert hass.states.get("sensor.stue_status").state == "idle"

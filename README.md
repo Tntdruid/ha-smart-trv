@@ -28,9 +28,11 @@ Alle TRV'er, der i Home Assistant er en `climate`-entitet med setpunkt og egen t
 | | Sluk ved åbent vindue | "Varmer"-status | Bemærk |
 |---|---|---|---|
 | Tuya **TV02** | `hvac_mode: off` | gættes ud fra setpunkt og TRV'ens måling | kun 0,5 °C-trin |
-| Tuya **TRV602** | preset `off` (den har ingen hvac off) | fra TRV'ens `running_state` | sæt `mode` til **comfort** i Z2M: `eco` åbner/lukker kun helt, og så kan PI-reguleringen ikke finjustere |
+| Tuya **TRV602** | preset `off` (den har ingen hvac off) | fra TRV'ens `running_state` | i Z2M: sæt **`max_temperature` til 35 °C** (ellers afviser den Smart TRV's setpunkter over max, og varmer aldrig), og `mode` til **comfort** (`eco` åbner/lukker kun helt) |
 
 Har en TRV hverken hvac off eller preset off, sætter Smart TRV den til laveste setpunkt, mens vinduet er åbent.
+
+Tager en TRV ikke imod det setpunkt, Smart TRV sender (den viser stadig noget andet efter 10 minutter), skriver forklaringen en ⚠️-advarsel om det.
 
 ## Installation
 

@@ -136,6 +136,8 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
         self._last_sent: dict[str, tuple[float, datetime]] = {}
         self._trvs_off = False
         self._full_open_since: datetime | None = None
+        # TRVs still reporting another setpoint than we sent, after a resend: trv -> (sent, reported)
+        self._rejected: dict[str, tuple[float, float]] = {}
 
     # ----------------------------------------------------------------- lifecycle
 
@@ -262,10 +264,15 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
 
             reported = state.attributes.get(ATTR_TEMPERATURE)
             if reported is not None and abs(float(reported) - setpoint) < 0.05:
+                self._rejected.pop(trv, None)
                 continue
             last = self._last_sent.get(trv)
             if last is not None and last[0] == setpoint and now - last[1] < RESEND_AFTER:
                 continue  # sent already, waiting for the TRV to report back
+            if last is not None and last[0] == setpoint and reported is not None:
+                # Sent a while ago and the TRV still shows something else: it is refusing it,
+                # e.g. a TRV602 whose max_temperature is below what we ask for.
+                self._rejected[trv] = (setpoint, float(reported))
             await self._call("set_temperature", trv, temperature=setpoint)
             self._last_sent[trv] = (setpoint, now)
 
@@ -288,6 +295,7 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
                 low = state.attributes.get(ATTR_MIN_TEMP, TRV_MIN_TEMP)
                 await self._call("set_temperature", trv, temperature=low)
         self._last_sent.clear()
+        self._rejected.clear()
         self._pi.output = None  # start from a fresh setpoint when heating resumes
         self._trvs_off = True
 
@@ -323,6 +331,7 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
             "trv_setpoint": self._trv_setpoint,
             "trv_temperature": trv_temp,
             "trv_temperatures": self._trv_temperatures(),
+            "rejected": dict(self._rejected),
             "error": round(self._pi.error, 2),
             "p_term": round(self._pi.kp * self._pi.error, 2),
             "integral": round(self._pi.integral, 2),
@@ -406,8 +415,11 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
                 heating |= action == HVACAction.HEATING
             else:  # TV02 reports no valve state: guess from its own sensor
                 local = s.attributes.get(ATTR_CURRENT_TEMPERATURE)
-                # Prefer what we commanded; the TRV may not have confirmed it yet.
-                sp = self._trv_setpoint or s.attributes.get(ATTR_TEMPERATURE)
+                # Prefer what we commanded (the TRV may not have confirmed it yet), unless the
+                # TRV has refused it.
+                sp = s.attributes.get(ATTR_TEMPERATURE)
+                if trv not in self._rejected:
+                    sp = self._trv_setpoint or sp
                 heating |= local is not None and sp is not None and float(local) < float(sp)
         return HVACAction.HEATING if heating else HVACAction.IDLE
 
