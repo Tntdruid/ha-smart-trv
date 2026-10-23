@@ -8,6 +8,36 @@
 {%- else -%}
 title: Varme
 views:
+{%- set ns = namespace(problems=[]) %}
+{%- for c in rooms %}
+{%- set pb = device_entities(device_id(c)) | select('search', '^binary_sensor[.].*_problem$') | first %}
+{%- if pb %}{% set ns.problems = ns.problems + [(pb, state_attr(c, 'friendly_name') or c)] %}{% endif %}
+{%- endfor %}
+  - title: Hele huset
+    path: hele-huset
+    type: sections
+    max_columns: 4
+    sections:
+{%- if ns.problems %}
+      - type: grid
+        cards:
+          - type: heading
+            heading: TRV-problemer
+          - type: entities
+            state_color: true
+            entities:
+{%- for pb, name in ns.problems %}
+              - entity: {{ pb }}
+                name: {{ name | tojson }}
+{%- endfor %}
+{%- endif %}
+{%- for c in rooms %}
+      - type: grid
+        cards:
+          - type: custom:smart-trv-card
+            entity: {{ c }}
+            show_graph: false
+{%- endfor %}
 {%- for c in rooms %}
 {%- set ents = device_entities(device_id(c)) | select('match', 'sensor[.]') | list %}
 {%- set s_status = ents | select('search', '_status$') | first %}

@@ -48,15 +48,24 @@ class PIController:
         self.integral = self._clamp(trv_temp - room_temp, 0.0, self.max_boost)
 
     def update(
-        self, target: float, room_temp: float, dt_hours: float, trv_temp: float | None = None
+        self,
+        target: float,
+        room_temp: float,
+        dt_hours: float,
+        trv_temp: float | None = None,
+        feedforward: float = 0.0,
     ) -> float:
-        """Return the TRV setpoint, rounded to the TRV's step."""
+        """Return the TRV setpoint, rounded to the TRV's step.
+
+        feedforward: extra offset known in advance (outdoor compensation), so the integral
+        only has to learn what is left.
+        """
         self.error = target - room_temp
         p = self.kp * self.error
 
         self.valve_saturated = False
         if trv_temp is not None:
-            current = target + p + self.integral
+            current = target + p + self.integral + feedforward
             self.valve_saturated = (
                 current - trv_temp >= self.valve_margin and self.error > 0
             ) or (trv_temp - current >= self.valve_margin and self.error < 0)
@@ -69,13 +78,13 @@ class PIController:
                 self.max_boost,
             )
             # Anti-windup: don't grow the integral while the output is already saturated.
-            unsat = p + candidate
+            unsat = p + candidate + feedforward
             saturated_high = unsat > self.max_boost and self.error > 0
             saturated_low = unsat < -self.max_cut and self.error < 0
             if not (saturated_high or saturated_low):
                 self.integral = candidate
 
-        offset = self._clamp(p + self.integral, -self.max_cut, self.max_boost)
+        offset = self._clamp(p + self.integral + feedforward, -self.max_cut, self.max_boost)
         setpoint = self._clamp(target + offset, self.min_temp, self.max_temp)
         if self.output is None or abs(setpoint - self.output) >= self.hysteresis:
             self.output = round(round(setpoint / self.step) * self.step, 2)

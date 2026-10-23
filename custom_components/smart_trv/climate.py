@@ -35,7 +35,7 @@ from homeassistant.core import (
     HomeAssistant,
     callback,
 )
-from homeassistant.helpers import entity_platform
+from homeassistant.helpers import entity_platform, entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -56,7 +56,11 @@ from .const import (
     CONF_KI,
     CONF_KP,
     CONF_MAX_BOOST,
+    CONF_AUTO_TUNE,
     CONF_MAX_CUT,
+    CONF_OUTDOOR_GAIN,
+    CONF_OUTDOOR_SENSOR,
+    CONF_PREHEAT,
     CONF_NIGHT_ENTITY,
     CONF_ROOM_SENSOR,
     CONF_TRV_STEP,
@@ -68,7 +72,11 @@ from .const import (
     DEFAULT_KI,
     DEFAULT_KP,
     DEFAULT_MAX_BOOST,
+    BATTERY_LOW,
+    DEFAULT_AUTO_TUNE,
     DEFAULT_MAX_CUT,
+    DEFAULT_OUTDOOR_GAIN,
+    DEFAULT_PREHEAT,
     DEFAULT_TRV_STEP,
     DEFAULT_WINDOW_CLOSE_DELAY,
     DEFAULT_WINDOW_OPEN_DELAY,
@@ -81,9 +89,11 @@ from .const import (
     STATUS_OFF,
     STATUS_WINDOW,
     TRV_MAX_TEMP,
+    TRV_STALE_HOURS,
     TRV_MIN_TEMP,
 )
 from .controller import PIController
+from .learning import AutoTuner, HeatRateLearner, preheat_hours
 from .diagnostics_text import explain
 
 _LOGGER = logging.getLogger(__name__)
@@ -95,6 +105,14 @@ MAX_DT_HOURS = 0.5
 
 ATTR_DAY_TEMPERATURE = "day_temperature"
 ATTR_NIGHT_ACTIVE = "night_active"
+ATTR_PREHEATING = "preheating"
+ATTR_HEAT_RATE = "heat_rate"
+ATTR_HEAT_RATE_SAMPLES = "heat_rate_samples"
+ATTR_KP = "kp"
+ATTR_KI = "ki"
+ATTR_TUNED_FROM = "tuned_from"  # the configured Kp/Ki the tuned values started from
+ATTR_LAST_TUNING = "last_tuning"
+ATTR_OUTDOOR_FF = "outdoor_ff"
 
 
 async def async_setup_entry(
@@ -160,6 +178,31 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
         # TRVs still reporting another setpoint than we sent, after a resend: trv -> (sent, reported)
         self._rejected: dict[str, tuple[float, float]] = {}
 
+        # Outdoor compensation: a feedforward that rises before the room has cooled.
+        self._outdoor_sensor: str | None = conf.get(CONF_OUTDOOR_SENSOR)
+        self._outdoor_gain = float(conf.get(CONF_OUTDOOR_GAIN, DEFAULT_OUTDOOR_GAIN))
+        self._ff = 0.0
+        self._restored_ff: float | None = None
+        self._ff_migrated = True  # set False when a restored integral was learned without it
+
+        # Preheat: end the night early enough that the room is warm when it ends.
+        self._preheat_enabled = bool(conf.get(CONF_PREHEAT, DEFAULT_PREHEAT))
+        self._heat_rate = HeatRateLearner()
+        self._preheat_for: datetime | None = None  # the night end we are preheating for
+
+        # Auto-tuning starts from the configured Kp/Ki and nudges them once a day.
+        self._opt_gains = [self._pi.kp, self._pi.ki]
+        self._tuner = (
+            AutoTuner(kp=self._pi.kp, ki=self._pi.ki)
+            if conf.get(CONF_AUTO_TUNE, DEFAULT_AUTO_TUNE)
+            else None
+        )
+        self._last_target: float | None = None
+
+        # TRV health: battery sensors found through the device registry; trv -> problem text.
+        self._battery_entities: dict[str, str] = {}
+        self._problems: dict[str, str] = {}
+
     # ----------------------------------------------------------------- lifecycle
 
     async def async_added_to_hass(self) -> None:
@@ -175,7 +218,23 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
             if (integral := last.attributes.get(ATTR_INTEGRAL)) is not None:
                 self._pi.integral = float(integral)
                 self._seeded = True
+                # Learned before outdoor compensation existed: take the feedforward out once.
+                self._restored_ff = last.attributes.get(ATTR_OUTDOOR_FF)
+                self._ff_migrated = self._restored_ff is not None
+            if (rate := last.attributes.get(ATTR_HEAT_RATE)) is not None:
+                self._heat_rate.rate = float(rate)
+                self._heat_rate.samples = int(last.attributes.get(ATTR_HEAT_RATE_SAMPLES) or 1)
+            # Keep tuned gains only while the configured ones are unchanged.
+            if (
+                self._tuner is not None
+                and last.attributes.get(ATTR_TUNED_FROM) == self._opt_gains
+                and last.attributes.get(ATTR_KP) is not None
+            ):
+                self._tuner.kp = self._pi.kp = float(last.attributes[ATTR_KP])
+                self._tuner.ki = self._pi.ki = float(last.attributes[ATTR_KI])
+                self._tuner.last_change = last.attributes.get(ATTR_LAST_TUNING)
 
+        self._find_battery_entities()
         self._attr_current_temperature = self._read_float(self._room_sensor)
         self._window_off = self._any_window_open()  # already open at startup: no delay
         self.async_on_remove(self._cancel_window_timer)
@@ -193,7 +252,11 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
             )
         )
         self.async_on_remove(
-            async_track_state_change_event(self.hass, self._trvs, self._async_trv_changed)
+            async_track_state_change_event(
+                self.hass,
+                [*self._trvs, *self._battery_entities.values()],  # battery drops show at once
+                self._async_trv_changed,
+            )
         )
         self.async_on_remove(
             async_track_time_interval(self.hass, self._async_tick, self._interval)
@@ -276,6 +339,7 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
             self._publish()
             return
 
+        self._update_preheat(now)
         target = self.target_temperature
         if room is None:
             self._publish()  # TRVs keep their last setpoint
@@ -290,9 +354,15 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
             dt_hours = min((now - self._last_run).total_seconds() / 3600, MAX_DT_HOURS)
         self._last_run = now
 
+        self._ff = self._outdoor_feedforward(target)
+        if not self._ff_migrated and self._outdoor_sensor:
+            self._pi.integral -= self._ff  # it already contained this load; avoid a jump
+            self._ff_migrated = True
+
         self._trv_setpoint = self._pi.update(
-            target, room, dt_hours, self._average_trv_temperature()
+            target, room, dt_hours, self._average_trv_temperature(), self._ff
         )
+        self._learn(now, room, target, dt_hours)
         # Track how long the TRV has been asked for full heat, to spot a radiator that stays cold.
         if self._pi.valve_saturated and self._pi.error > 0:
             self._full_open_since = self._full_open_since or now
@@ -372,6 +442,7 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
     @callback
     def _publish(self) -> None:
         """Write our state and hand the latest numbers to the diagnostic sensors."""
+        self._problems = self._check_trvs()
         self.async_write_ha_state()
         self._entry.runtime_data.diag = self._diagnostics()
         async_dispatcher_send(self.hass, SIGNAL_UPDATE.format(self._entry.entry_id))
@@ -404,6 +475,12 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
             "p_term": round(self._pi.kp * self._pi.error, 2),
             "integral": round(self._pi.integral, 2),
             "night_active": self._night_active,
+            "preheat_until": (
+                dt_util.as_local(self._preheat_for).strftime("%H:%M") if self._preheat_for else None
+            ),
+            "day_target": self._day_target,
+            "outdoor_ff": self._ff,
+            "problems": self._problems,
             "full_open_hours": (
                 round((dt_util.utcnow() - self._full_open_since).total_seconds() / 3600, 1)
                 if self._full_open_since
@@ -418,12 +495,98 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
     # ------------------------------------------------------------------- helpers
 
     @property
-    def _night_active(self) -> bool:
+    def _night_scheduled(self) -> bool:
         return (
             self._night_entity is not None
             and (s := self.hass.states.get(self._night_entity)) is not None
             and s.state == STATE_ON
         )
+
+    @property
+    def _night_active(self) -> bool:
+        """Night temperature in use: night scheduled and not preheating for the morning."""
+        return self._night_scheduled and self._preheat_for is None
+
+    def _night_end(self) -> datetime | None:
+        """When the night ends, if the night entity says (a schedule has next_event)."""
+        if self._night_entity is None or (s := self.hass.states.get(self._night_entity)) is None:
+            return None
+        nxt = s.attributes.get("next_event")
+        if isinstance(nxt, str):
+            nxt = dt_util.parse_datetime(nxt)
+        return nxt if isinstance(nxt, datetime) else None
+
+    def _update_preheat(self, now: datetime) -> None:
+        nxt = self._night_end()
+        if not (self._preheat_enabled and self._night_scheduled) or nxt is None or now >= nxt:
+            self._preheat_for = None
+            return
+        if self._preheat_for == nxt:
+            return  # latched: keep going even though the room is getting warmer
+        room = self._attr_current_temperature
+        if room is None:
+            return
+        hours = preheat_hours(self._heat_rate.rate, room, self._day_target)
+        if hours > 0 and now >= nxt - timedelta(hours=hours):
+            self._preheat_for = nxt
+            _LOGGER.info(
+                "%s: preheating %.1f h before the night ends (%.2f °C/h)",
+                self.entity_id, hours, self._heat_rate.rate,
+            )
+
+    def _outdoor_feedforward(self, target: float) -> float:
+        if not self._outdoor_sensor:
+            return 0.0
+        outdoor = self._read_float(self._outdoor_sensor)
+        if outdoor is None:
+            return self._ff  # keep the last one through a sensor hiccup
+        return round(max(0.0, self._outdoor_gain * (target - outdoor)), 2)
+
+    def _learn(self, now: datetime, room: float, target: float, dt_hours: float) -> None:
+        full_heat = self._pi.valve_saturated and self._pi.error > 0
+        self._heat_rate.observe(now.timestamp() / 3600, room, full_heat)
+
+        if self._tuner is not None and dt_hours > 0:
+            steady = (
+                not self._pi.valve_saturated
+                and self._preheat_for is None
+                and self._window_pending is None
+                and target == self._last_target
+            )
+            if (change := self._tuner.observe(self._pi.error, dt_hours, steady)) is not None:
+                self._pi.kp, self._pi.ki = self._tuner.kp, self._tuner.ki
+                _LOGGER.info("%s: auto-tuning: %s", self.entity_id, change)
+        self._last_target = target
+
+    def _find_battery_entities(self) -> None:
+        reg = er.async_get(self.hass)
+        for trv in self._trvs:
+            if (entry := reg.async_get(trv)) is None or entry.device_id is None:
+                continue
+            for other in er.async_entries_for_device(reg, entry.device_id):
+                if other.domain == "sensor" and (
+                    other.device_class or other.original_device_class
+                ) == "battery":
+                    self._battery_entities[trv] = other.entity_id
+                    break
+
+    def _check_trvs(self) -> dict[str, str]:
+        """Problems per TRV: offline, silent for hours, or low battery."""
+        problems: dict[str, str] = {}
+        now = dt_util.utcnow()
+        for trv in self._trvs:
+            state = self.hass.states.get(trv)
+            if state is None or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+                problems[trv] = "offline"
+                continue
+            silent = (now - state.last_reported).total_seconds() / 3600
+            if silent >= TRV_STALE_HOURS:
+                problems[trv] = f"ingen kontakt i {silent:.0f} t"
+                continue
+            battery = self._read_float(self._battery_entities.get(trv, ""))
+            if battery is not None and battery < BATTERY_LOW:
+                problems[trv] = f"lavt batteri ({battery:.0f} %)"
+        return problems
 
     @property
     def _window_open(self) -> bool:
@@ -504,6 +667,14 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
             ATTR_WINDOW_OPEN: self._window_open,
             ATTR_DAY_TEMPERATURE: self._day_target,
             ATTR_NIGHT_ACTIVE: self._night_active,
+            ATTR_PREHEATING: self._preheat_for is not None,
+            ATTR_HEAT_RATE: round(self._heat_rate.rate, 2),
+            ATTR_HEAT_RATE_SAMPLES: self._heat_rate.samples,
+            ATTR_KP: self._pi.kp,
+            ATTR_KI: self._pi.ki,
+            ATTR_TUNED_FROM: self._opt_gains,
+            ATTR_LAST_TUNING: self._tuner.last_change if self._tuner else None,
+            ATTR_OUTDOOR_FF: self._ff,
         }
 
     async def async_set_temperature(self, **kwargs: Any) -> None:

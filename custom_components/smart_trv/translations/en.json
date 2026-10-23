@@ -16,7 +16,11 @@
           "interval": "Control interval",
           "night_entity": "Night schedule",
           "window_open_delay": "Turn off after open (s)",
-          "window_close_delay": "Back on after closed (s)"
+          "window_close_delay": "Back on after closed (s)",
+          "outdoor_sensor": "Outdoor temperature",
+          "outdoor_gain": "Outdoor compensation",
+          "preheat": "Preheat before the night ends",
+          "auto_tune": "Auto-tune Kp/Ki"
         },
         "data_description": {
           "room_sensor": "The sensor that measures the temperature you actually care about.",
@@ -26,7 +30,11 @@
           "trv_step": "TV02 accepts 0.5 °C steps.",
           "night_entity": "A schedule, input_boolean or binary_sensor. While it is on, the room uses its night temperature (set on the device page or the dashboard).",
           "window_open_delay": "How long a window or door must stay open before the TRVs turn off. Walking through a door shouldn't turn the heating off. Default 60.",
-          "window_close_delay": "How long it must stay closed before heating resumes. Default 0."
+          "window_close_delay": "How long it must stay closed before heating resumes. Default 0.",
+          "outdoor_sensor": "Optional. Lets Smart TRV react to cold nights before the room cools down.",
+          "outdoor_gain": "Extra TRV °C per °C between room target and outdoors. 0 turns it off. Default 0.1.",
+          "preheat": "Learns how fast the room warms and starts early, so it is warm when the night schedule ends. Needs a schedule as night schedule.",
+          "auto_tune": "Once a day: lower Kp/Ki if the room oscillated, raise Ki if it stayed off target."
         }
       }
     }
@@ -47,7 +55,11 @@
           "interval": "Control interval",
           "night_entity": "Night schedule",
           "window_open_delay": "Turn off after open (s)",
-          "window_close_delay": "Back on after closed (s)"
+          "window_close_delay": "Back on after closed (s)",
+          "outdoor_sensor": "Outdoor temperature",
+          "outdoor_gain": "Outdoor compensation",
+          "preheat": "Preheat before the night ends",
+          "auto_tune": "Auto-tune Kp/Ki"
         },
         "data_description": {
           "room_sensor": "The sensor that measures the temperature you actually care about.",
@@ -57,7 +69,11 @@
           "trv_step": "TV02 accepts 0.5 °C steps.",
           "night_entity": "A schedule, input_boolean or binary_sensor. While it is on, the room uses its night temperature (set on the device page or the dashboard).",
           "window_open_delay": "How long a window or door must stay open before the TRVs turn off. Walking through a door shouldn't turn the heating off. Default 60.",
-          "window_close_delay": "How long it must stay closed before heating resumes. Default 0."
+          "window_close_delay": "How long it must stay closed before heating resumes. Default 0.",
+          "outdoor_sensor": "Optional. Lets Smart TRV react to cold nights before the room cools down.",
+          "outdoor_gain": "Extra TRV °C per °C between room target and outdoors. 0 turns it off. Default 0.1.",
+          "preheat": "Learns how fast the room warms and starts early, so it is warm when the night schedule ends. Needs a schedule as night schedule.",
+          "auto_tune": "Once a day: lower Kp/Ki if the room oscillated, raise Ki if it stayed off target."
         }
       }
     }
@@ -99,6 +115,11 @@
     "number": {
       "night_temperature": {
         "name": "Night temperature"
+      }
+    },
+    "binary_sensor": {
+      "problem": {
+        "name": "TRV problem"
       }
     }
   }

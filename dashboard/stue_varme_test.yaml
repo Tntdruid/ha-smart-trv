@@ -1,5 +1,24 @@
 title: Varme
 views:
+  - title: Hele huset
+    path: hele-huset
+    type: sections
+    max_columns: 4
+    sections:
+      - type: grid
+        cards:
+          - type: heading
+            heading: TRV-problemer
+          - type: entities
+            state_color: true
+            entities:
+              - entity: binary_sensor.stue_varme_test_problem
+                name: "Stue Varme Test"
+      - type: grid
+        cards:
+          - type: custom:smart-trv-card
+            entity: climate.stue_varme_test
+            show_graph: false
   - title: "Stue Varme Test"
     path: stue-varme-test
     type: sections

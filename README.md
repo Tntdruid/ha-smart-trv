@@ -109,6 +109,29 @@ Klik på en værdi for at se dens historik. Kortet finder selv rummets sensorer,
 
 Preview uden Home Assistant: `python -m http.server` i repoet, og åbn `http://localhost:8000/tests/card_preview.html`.
 
+## Forvarmning
+
+Bruger rummet en **tidsplan** som natplan, starter Smart TRV varmen så tidligt, at rummet *er* på dagtemperatur, når natten slutter (tidsplanens `next_event`). Den lærer selv rummets opvarmningshastighed (°C/time) ved fuld varme. Indtil den har målt, regner den med 1 °C/time. Den forvarmer højst 6 timer før. Mens den gør det, står der "☀️ Forvarmer: rummet skal være 22,0 °C kl. 06:00" i forklaringen. Kan slås fra under Konfigurer → *Forvarm før natten slutter*.
+
+Simulering (`python tests/simulate_learning.py`), nat 19 °C til 06:00, dag 22 °C: rummet er 21,8 °C kl. 06:00 med forvarmning, mod 19,0 °C uden.
+
+## Udetemperatur
+
+Vælg en udesensor under Konfigurer (fx `sensor.ude_ude_temperatur`). Så lægger Smart TRV `0,1 × (mål − ude)` oven i TRV-setpunktet og reagerer på kolde nætter, *før* rummet bliver koldt. Det lærte offset tager sig af resten. I simuleringen halveres svinget på en normal dag (21,75–22,24 → 21,89–22,13 °C). Tilføjes udesensoren til et rum, der allerede har lært, trækkes kompenseringen fra det lærte, så setpunktet ikke springer.
+
+## Overvågning af TRV'er
+
+`binary_sensor.<rum>_problem` tænder, når en TRV er **offline**, ikke har meldt sig i **6 timer**, eller har **under 20 % batteri**. Batterisensoren findes selv via TRV'ens enhed. Problemet står også som ⚠️ i forklaringen, og fanen **Hele huset** i dashboard-skabelonen samler alle rum og deres problemer. Brug sensoren i en automation, hvis du vil have en notifikation.
+
+## Automatisk tuning
+
+En gang i døgnet ser Smart TRV på, hvordan rummet har opført sig, når det regulerer roligt. Opstarten om morgenen, udluftning og helt åben ventil tæller ikke med.
+- Svingede rummet frem og tilbage: Kp −15 % og Ki −10 %.
+- Lå det typisk mere end 0,12 °C fra målet uden at svinge: Kp +15 % og Ki +20 %.
+- Ellers: ingen ændring.
+
+Grænser: Kp 1–6 og Ki 0,3–3. Klimaentiteten viser de aktuelle `kp`, `ki` og `last_tuning`. Ændrer du selv Kp/Ki under Konfigurer, starter tuningen forfra fra dine værdier. Kan slås fra under *Automatisk tuning af Kp/Ki*.
+
 ## Se hvad den laver
 
 Integrationen laver sensorer, der kan vises som grafer (eksempel for "Stue"):

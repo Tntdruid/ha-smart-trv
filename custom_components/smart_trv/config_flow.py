@@ -12,7 +12,14 @@ from homeassistant.core import callback
 from homeassistant.helpers import selector
 
 from .const import (
+    CONF_AUTO_TUNE,
     CONF_INTERVAL,
+    CONF_OUTDOOR_GAIN,
+    CONF_OUTDOOR_SENSOR,
+    CONF_PREHEAT,
+    DEFAULT_AUTO_TUNE,
+    DEFAULT_OUTDOOR_GAIN,
+    DEFAULT_PREHEAT,
     CONF_KI,
     CONF_KP,
     CONF_MAX_BOOST,
@@ -72,6 +79,11 @@ def _entities_schema(defaults: dict[str, Any]) -> dict:
         ): selector.EntitySelector(
             selector.EntitySelectorConfig(domain=["schedule", "input_boolean", "binary_sensor"])
         ),
+        vol.Optional(
+            CONF_OUTDOOR_SENSOR, description={"suggested_value": defaults.get(CONF_OUTDOOR_SENSOR)}
+        ): selector.EntitySelector(
+            selector.EntitySelectorConfig(domain="sensor", device_class="temperature")
+        ),
     }
 
 
@@ -87,6 +99,12 @@ def _tuning_schema(defaults: dict[str, Any]) -> dict:
             _number(0.1, 1, 0.1, "°C"),
         vol.Required(CONF_INTERVAL, default=defaults.get(CONF_INTERVAL, DEFAULT_INTERVAL)):
             _number(1, 30, 1, "min"),
+        vol.Required(CONF_OUTDOOR_GAIN, default=defaults.get(CONF_OUTDOOR_GAIN, DEFAULT_OUTDOOR_GAIN)):
+            _number(0, 0.5, 0.05),
+        vol.Required(CONF_PREHEAT, default=defaults.get(CONF_PREHEAT, DEFAULT_PREHEAT)):
+            selector.BooleanSelector(),
+        vol.Required(CONF_AUTO_TUNE, default=defaults.get(CONF_AUTO_TUNE, DEFAULT_AUTO_TUNE)):
+            selector.BooleanSelector(),
     }
 
 
@@ -117,6 +135,7 @@ class SmartTRVOptionsFlow(OptionsFlow):
         if user_input is not None:
             # A cleared field is left out of user_input; store None so it overrides entry.data.
             user_input.setdefault(CONF_NIGHT_ENTITY, None)
+            user_input.setdefault(CONF_OUTDOOR_SENSOR, None)
             return self.async_create_entry(data=user_input)
 
         current = {**self.config_entry.data, **self.config_entry.options}

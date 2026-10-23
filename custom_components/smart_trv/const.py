@@ -14,6 +14,10 @@ CONF_TRV_STEP = "trv_step"
 CONF_NIGHT_ENTITY = "night_entity"  # schedule/input_boolean/binary_sensor: on = night
 CONF_WINDOW_OPEN_DELAY = "window_open_delay"  # seconds open before the TRVs turn off
 CONF_WINDOW_CLOSE_DELAY = "window_close_delay"  # seconds closed before heating resumes
+CONF_OUTDOOR_SENSOR = "outdoor_sensor"
+CONF_OUTDOOR_GAIN = "outdoor_gain"  # TRV °C per °C between room target and outdoors
+CONF_AUTO_TUNE = "auto_tune"
+CONF_PREHEAT = "preheat"
 
 DEFAULT_NAME = "Smart TRV"
 DEFAULT_KP = 3.0  # °C extra TRV setpoint per °C room error
@@ -24,6 +28,13 @@ DEFAULT_INTERVAL = 5  # minutes between control runs
 DEFAULT_TRV_STEP = 0.5  # TV02 only accepts 0.5 °C steps
 DEFAULT_WINDOW_OPEN_DELAY = 60  # walking through a door should not turn the heating off
 DEFAULT_WINDOW_CLOSE_DELAY = 0
+DEFAULT_OUTDOOR_GAIN = 0.1
+DEFAULT_AUTO_TUNE = True
+DEFAULT_PREHEAT = True
+
+# A TRV that hasn't reported for this long, or whose battery is this low, is a problem.
+TRV_STALE_HOURS = 6
+BATTERY_LOW = 20
 
 TRV_MIN_TEMP = 5.0
 TRV_MAX_TEMP = 30.0

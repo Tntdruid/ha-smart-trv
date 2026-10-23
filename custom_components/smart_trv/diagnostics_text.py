@@ -21,6 +21,14 @@ def _c(value: float | None) -> str:
 
 
 def explain(diag: dict[str, Any], room: float | None, target: float | None) -> str:
+    text = _explain_control(diag, room, target)
+    # TRV health matters whatever the room is doing (also when off or aired).
+    for trv_id, problem in (diag.get("problems") or {}).items():
+        text += f" ⚠️ {trv_id}: {problem}."
+    return text
+
+
+def _explain_control(diag: dict[str, Any], room: float | None, target: float | None) -> str:
     status = diag["status"]
     if status == STATUS_OFF:
         return "Slukket. TRV'erne er slukket."
@@ -55,11 +63,23 @@ def explain(diag: dict[str, Any], room: float | None, target: float | None) -> s
             f"🪟 Vindue/dør åben: slukker om {diag.get('window_seconds_left')} sek., "
             "hvis den bliver ved med at stå åben. "
         )
+    mode = ""
+    if diag.get("preheat_until"):
+        mode = (
+            f"☀️ Forvarmer: rummet skal være {_c(diag.get('day_target'))} "
+            f"kl. {diag['preheat_until']}, når natten slutter. "
+        )
+    elif diag.get("night_active"):
+        mode = "🌙 Nattemperatur. "
+    outdoor = diag.get("outdoor_ff") or 0.0
+    parts = f"Lært offset {_c(diag['integral'])} + reaktion nu {_c(diag['p_term'])}"
+    if outdoor >= 0.05:
+        parts += f" + udetemperatur {_c(outdoor)}"
     text = (
         pending
-        + ("🌙 Nattemperatur. " if diag.get("night_active") else "")
+        + mode
         + f"{where}. TRV sat til {_c(diag['trv_setpoint'])}, {reads}, så {valve}. "
-        f"Lært offset {_c(diag['integral'])} + reaktion nu {_c(diag['p_term'])}."
+        f"{parts}."
     )
     trv = diag["trv_temperature"]
     hours = diag.get("full_open_hours", 0.0)

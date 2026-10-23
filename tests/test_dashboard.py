@@ -44,7 +44,8 @@ async def test_generates_view_per_room(hass: HomeAssistant, trv_calls) -> None: 
 
     dashboard = yaml.safe_load(render(hass))
     views = dashboard["views"]
-    assert sorted(v["title"] for v in views) == ["Smart TRV", "Stue"]
+    assert [v["title"] for v in views][0] == "Hele huset"
+    assert sorted(v["title"] for v in views[1:]) == ["Smart TRV", "Stue"]
 
     ids = list(entity_ids(dashboard))
     assert "climate.smart_trv" in ids and "sensor.smart_trv_status" in ids
