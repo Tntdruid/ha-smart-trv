@@ -49,3 +49,22 @@ async def test_leftover_calibration_is_not_learned(hass: HomeAssistant, trv_call
     explanation = hass.states.get("sensor.stue_status").attributes["explanation"]
     assert "5,7 °C koldere end rummet" in explanation
     assert "local_temperature_calibration" in explanation
+
+
+async def test_per_trv_temperatures_with_two_trvs(hass: HomeAssistant, trv_calls) -> None:  # noqa: F811
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from .test_climate import USER_INPUT
+
+    hass.states.async_set("sensor.stue_temperatur", "21.1")
+    hass.states.async_set("climate.a", "heat", {"current_temperature": 22.1, "temperature": 22})
+    hass.states.async_set("climate.b", "heat", {"current_temperature": 20.1, "temperature": 22})
+    entry = MockConfigEntry(domain="smart_trv", data=USER_INPUT | {"trvs": ["climate.a", "climate.b"]})
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    trv = hass.states.get("sensor.stue_trv_temperature")
+    assert float(trv.state) == 21.1  # the average
+    assert trv.attributes["climate.a"] == 22.1 and trv.attributes["climate.b"] == 20.1
+    assert "i snit 21,1 °C (22,1 °C, 20,1 °C)" in hass.states.get("sensor.stue_status").attributes["explanation"]

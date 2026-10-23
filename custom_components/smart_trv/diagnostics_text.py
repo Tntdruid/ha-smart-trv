@@ -38,10 +38,17 @@ def explain(diag: dict[str, Any], room: float | None, target: float | None) -> s
         where = f"Rummet er {_c(-error)} over målet ({_c(room)} af {_c(target)})"
 
     valve = "ventilen er åben" if status == STATUS_HEATING else "ventilen er lukket"
+    per_trv = diag.get("trv_temperatures") or {}
+    reads = (
+        f"TRV'erne måler i snit {_c(diag['trv_temperature'])} ("
+        + ", ".join(_c(t) for t in per_trv.values())
+        + ")"
+        if len(per_trv) > 1
+        else f"TRV'en måler {_c(diag['trv_temperature'])}"
+    )
     text = (
         ("🌙 Nattemperatur. " if diag.get("night_active") else "")
-        + f"{where}. TRV sat til {_c(diag['trv_setpoint'])}, TRV'en måler "
-        f"{_c(diag['trv_temperature'])}, så {valve}. "
+        + f"{where}. TRV sat til {_c(diag['trv_setpoint'])}, {reads}, så {valve}. "
         f"Lært offset {_c(diag['integral'])} + reaktion nu {_c(diag['p_term'])}."
     )
     trv = diag["trv_temperature"]

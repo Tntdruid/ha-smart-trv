@@ -322,6 +322,7 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
             "status": status,
             "trv_setpoint": self._trv_setpoint,
             "trv_temperature": trv_temp,
+            "trv_temperatures": self._trv_temperatures(),
             "error": round(self._pi.error, 2),
             "p_term": round(self._pi.kp * self._pi.error, 2),
             "integral": round(self._pi.integral, 2),
@@ -363,13 +364,17 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
         except ValueError:
             return None
 
-    def _average_trv_temperature(self) -> float | None:
-        temps = [
-            float(t)
+    def _trv_temperatures(self) -> dict[str, float]:
+        """Each TRV's own reading, so an average over several TRVs can be explained."""
+        return {
+            trv: float(t)
             for trv in self._trvs
             if (s := self.hass.states.get(trv)) is not None
             and (t := s.attributes.get(ATTR_CURRENT_TEMPERATURE)) is not None
-        ]
+        }
+
+    def _average_trv_temperature(self) -> float | None:
+        temps = list(self._trv_temperatures().values())
         return round(sum(temps) / len(temps), 1) if temps else None
 
     def _first_trv_temperature(self) -> float | None:

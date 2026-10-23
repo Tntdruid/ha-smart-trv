@@ -25,6 +25,7 @@ from .const import DOMAIN, SIGNAL_UPDATE, STATUSES
 @dataclass(frozen=True, kw_only=True)
 class SmartTRVSensorDescription(SensorEntityDescription):
     explanation: bool = False
+    per_trv: bool = False
 
 
 def _temp(key: str, device_class: SensorDeviceClass | None = None) -> SmartTRVSensorDescription:
@@ -47,7 +48,15 @@ SENSORS = (
         explanation=True,
     ),
     _temp("trv_setpoint", SensorDeviceClass.TEMPERATURE),
-    _temp("trv_temperature", SensorDeviceClass.TEMPERATURE),
+    SmartTRVSensorDescription(
+        key="trv_temperature",
+        translation_key="trv_temperature",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        per_trv=True,  # state is the average; attributes show each TRV
+    ),
     # Offsets, not absolute temperatures: no temperature device class, so HA won't convert them.
     _temp("error"),
     _temp("p_term"),
@@ -99,5 +108,7 @@ class SmartTRVSensor(SensorEntity):
     def extra_state_attributes(self) -> dict[str, Any] | None:
         if self.entity_description.explanation:
             return {"explanation": self._diag.get("explanation")}
+        if self.entity_description.per_trv:
+            return dict(self._diag.get("trv_temperatures") or {})
         return None
 

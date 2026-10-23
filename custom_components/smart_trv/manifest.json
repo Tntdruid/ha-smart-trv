@@ -13,7 +13,7 @@
   "integration_type": "device",
   "iot_class": "calculated",
   "requirements": [],
-  "version": "0.3.3",
+  "version": "0.3.4",
   "after_dependencies": [
     "frontend"
   ]
