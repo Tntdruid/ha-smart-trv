@@ -87,6 +87,11 @@ Kortet viser:
 
 Klik på en værdi for at se dens historik. Kortet finder selv rummets sensorer, så du skal kun vælge climate-entiteten.
 
+**Viser kortet "Konfigurationsfejl", eller snurrer det i kortvælgeren?** Så er den automatiske indlæsning ikke slået igennem. Tilføj kortet som ressource (Indstillinger → Betjeningspaneler → ⋮ → Ressourcer → Tilføj, type *JavaScript-modul*):
+
+- `/smart_trv/smart-trv-card.js`: integrationen leverer selv filen, så den altid følger med, når du opdaterer.
+- eller kopiér `custom_components/smart_trv/frontend/smart-trv-card.js` til `/config/www/` og brug `/local/smart-trv-card.js`. Husk så at kopiere den igen ved hver opdatering, og sæt fx `?v=0.3.2` bag adressen, så browseren henter den nye version.
+
 Preview uden Home Assistant: `python -m http.server` i repoet, og åbn `http://localhost:8000/tests/card_preview.html`.
 
 ## Se hvad den laver
