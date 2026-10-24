@@ -158,3 +158,40 @@ async def test_trv_staying_higher_is_not_a_warning(hass: HomeAssistant, trv_call
         async_fire_time_changed(hass, dt_util.utcnow())
         await hass.async_block_till_done()
     assert "står stadig på" not in hass.states.get("sensor.stue_status").attributes["explanation"]
+
+
+async def test_trv_reporting_auto_is_left_alone(hass: HomeAssistant, trv_calls, freezer) -> None:  # noqa: F811
+    """Stue on 24 Oct: TRV602 reports system_mode auto in preset manual. Smart TRV forced
+    "heat" every 5 min and the logbook flipped Opvarmning/Auto all day."""
+    from datetime import timedelta
+
+    from homeassistant.util import dt as dt_util
+    from pytest_homeassistant_custom_component.common import async_fire_time_changed
+
+    hass.states.async_set("sensor.stue_temperatur", "21.4")
+    hass.states.async_set("binary_sensor.stue_vindue", "off")
+    attrs = {
+        "hvac_modes": ["auto", "heat", "off"],
+        "preset_modes": ["auto", "manual", "off", "on"],
+        "preset_mode": "manual",
+        "current_temperature": 21.6,
+        "temperature": 25.5,
+        "min_temp": 5,
+        "max_temp": 35,
+    }
+    hass.states.async_set(TRV, "auto", attrs)
+    entry = MockConfigEntry(domain="smart_trv", data=USER_INPUT | {"trvs": [TRV]})
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    for _ in range(12):  # one hour of control runs
+        freezer.tick(timedelta(minutes=5))
+        async_fire_time_changed(hass, dt_util.utcnow())
+        await hass.async_block_till_done()
+    assert last(trv_calls, "set_hvac_mode") is None
+    assert last(trv_calls, "set_preset_mode") is None  # already manual
+
+    hass.states.async_set("binary_sensor.stue_vindue", "on")
+    await hass.async_block_till_done()
+    assert last(trv_calls, "set_preset_mode") == {"preset_mode": "off"}
+    assert last(trv_calls, "set_hvac_mode") is None

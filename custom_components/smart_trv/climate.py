@@ -383,9 +383,11 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
             if state is None or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
                 continue
 
-            # Some TRVs (e.g. Tuya TRV602) have no hvac modes to set, only presets.
+            # Only wake a TRV that is off. Others may report "auto" while heating to our setpoint
+            # (TRV602 does in preset manual); forcing "heat" on them every run just flips the
+            # state back and forth and spends battery on a Zigbee command each time.
             modes = state.attributes.get(ATTR_HVAC_MODES) or [HVACMode.HEAT, HVACMode.OFF]
-            if HVACMode.HEAT in modes and state.state != HVACMode.HEAT:
+            if state.state == HVACMode.OFF and HVACMode.HEAT in modes:
                 await self._call("set_hvac_mode", trv, hvac_mode=HVACMode.HEAT)
 
             # "auto" follows the TRV's own schedule and overrides us; "manual" also leaves
@@ -419,14 +421,15 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
             state = self.hass.states.get(trv)
             if state is None or state.state in (HVACMode.OFF, STATE_UNAVAILABLE, STATE_UNKNOWN):
                 continue
-            # Use whatever "off" the TRV has: hvac mode (TV02), preset (TRV602), or lowest setpoint.
+            # Use whatever "off" the TRV has: preset (TRV602, which also lists hvac modes it
+            # can't really set), hvac mode (TV02), or its lowest setpoint.
             modes = state.attributes.get(ATTR_HVAC_MODES) or [HVACMode.HEAT, HVACMode.OFF]
             presets = state.attributes.get(ATTR_PRESET_MODES) or []
-            if HVACMode.OFF in modes:
-                await self._call("set_hvac_mode", trv, hvac_mode=HVACMode.OFF)
-            elif "off" in presets:
+            if "off" in presets:
                 if state.attributes.get(ATTR_PRESET_MODE) != "off":
                     await self._call("set_preset_mode", trv, preset_mode="off")
+            elif HVACMode.OFF in modes:
+                await self._call("set_hvac_mode", trv, hvac_mode=HVACMode.OFF)
             else:
                 low = state.attributes.get(ATTR_MIN_TEMP, TRV_MIN_TEMP)
                 await self._call("set_temperature", trv, temperature=low)
