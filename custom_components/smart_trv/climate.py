@@ -402,9 +402,13 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
             if last is not None and last[0] == setpoint and now - last[1] < RESEND_AFTER:
                 continue  # sent already, waiting for the TRV to report back
             if last is not None and last[0] == setpoint and reported is not None:
-                # Sent a while ago and the TRV still shows something else: it is refusing it,
-                # e.g. a TRV602 whose max_temperature is below what we ask for.
-                self._rejected[trv] = (setpoint, float(reported))
+                # Sent a while ago and the TRV still shows a lower setpoint: it is refusing it,
+                # e.g. a TRV602 whose max_temperature is below what we ask for. A TRV that
+                # stays a bit higher (slow to report a decrease) does no harm: no warning.
+                if float(reported) <= setpoint - 0.25:
+                    self._rejected[trv] = (setpoint, float(reported))
+                else:
+                    self._rejected.pop(trv, None)
             await self._call("set_temperature", trv, temperature=setpoint)
             self._last_sent[trv] = (setpoint, now)
 

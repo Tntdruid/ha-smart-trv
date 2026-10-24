@@ -92,9 +92,10 @@ def _explain_control(diag: dict[str, Any], room: float | None, target: float | N
     ):
         text += (
             f" ⚠️ TRV'en har været helt åben i {hours:.1f} t".replace(".", ",")
-            + f", men måler stadig kun {_c(trv)}: radiatoren bliver ikke varm. Tjek "
-            "fremløbstemperatur/natsænkning på fyr eller fjernvarme, luft i radiatoren, "
-            "og at TV02 trykker ventilstiften helt."
+            + f", men måler stadig kun {_c(trv)}: radiatoren bliver ikke varm. Test: skru "
+            "TRV'en af i 30 min (så er ventilen helt åben). Bliver radiatoren varm, sidder fejlen "
+            "i TRV'en/adapteren (ventilstiften trykkes ikke fri). Forbliver den kold, er det "
+            "varmeforsyningen: fyr/fjernvarme, en lukket returventil eller fastsiddende ventilstift."
         )
     for trv_id, (sent, reported) in (diag.get("rejected") or {}).items():
         text += (

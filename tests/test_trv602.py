@@ -143,3 +143,18 @@ async def test_warns_when_trv_refuses_setpoint(hass: HomeAssistant, trv_calls, f
     hass.states.async_set(TRV, "heat", {**hass.states.get(TRV).attributes, "hvac_action": None})
     await hass.async_block_till_done()
     assert hass.states.get("sensor.stue_status").state == "idle"
+
+
+async def test_trv_staying_higher_is_not_a_warning(hass: HomeAssistant, trv_calls, freezer) -> None:  # noqa: F811
+    """Stue on 24 Oct: TRV602 showed 25.5 while Smart TRV had sent 25.0. Harmless, no warning."""
+    from datetime import timedelta
+
+    from homeassistant.util import dt as dt_util
+    from pytest_homeassistant_custom_component.common import async_fire_time_changed
+
+    await setup_trv602(hass, preset="manual", local=21.4, setpoint=30.0)  # far above anything we send
+    for _ in range(4):
+        freezer.tick(timedelta(minutes=5))
+        async_fire_time_changed(hass, dt_util.utcnow())
+        await hass.async_block_till_done()
+    assert "står stadig på" not in hass.states.get("sensor.stue_status").attributes["explanation"]
