@@ -2,7 +2,7 @@
 
 Kept free of Home Assistant imports so it can be tested on its own.
 
-Why PI: Better Thermostat (target-temperature mode) shifts the TRV setpoint by
+Why PI: the usual fix for a TRV that reads the hot radiator shifts its setpoint by
 the measured difference between the TRV sensor and the room sensor. That is a
 proportional correction, and a proportional-only loop always settles with a
 remaining error -- typically the 0.5 °C you see. The integral term keeps
@@ -40,7 +40,7 @@ class PIController:
     output: float | None = None
 
     def seed(self, trv_temp: float | None, room_temp: float) -> None:
-        """Start the integral at the TRV/room sensor difference (what BT would use)."""
+        """Start the integral at the TRV/room sensor difference (the usual offset correction)."""
         if trv_temp is None:
             return
         # A TRV on a radiator never really reads colder than the room; if it does, it's a

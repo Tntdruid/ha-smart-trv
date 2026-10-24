@@ -33,7 +33,7 @@ async def test_sensors_show_what_it_does(hass: HomeAssistant, trv_calls) -> None
 
 
 async def test_leftover_calibration_is_not_learned(hass: HomeAssistant, trv_calls) -> None:  # noqa: F811
-    """The user's real case: target 22.5, room 21.8, TV02 reads 16.1 (BT left -5 °C calibration)."""
+    """The user's real case: target 22.5, room 21.8, TV02 reads 16.1 (an old -5 °C calibration left on it)."""
     from .test_climate import set_trv
 
     await setup_entry(hass)

@@ -106,7 +106,7 @@ def _explain_control(diag: dict[str, Any], room: float | None, target: float | N
     if trv is not None and room is not None and room - trv >= CALIBRATION_WARN_DELTA:
         text += (
             f" ⚠️ TRV'en måler {_c(room - trv)} koldere end rummet. Det er næsten altid en "
-            "gammel local_temperature_calibration (fx fra Better Thermostat): sæt den til 0 "
+            "gammel local_temperature_calibration fra en tidligere styring: sæt den til 0 "
             "i Zigbee2MQTT og kør smart_trv.reset_integral."
         )
     return text

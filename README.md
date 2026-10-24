@@ -2,21 +2,21 @@
 
 # Smart TRV (PI) – Home Assistant
 
-Styrer radiatortermostater (testet mod modellen af Tuya **TV02-Zigbee** via Zigbee2MQTT) ud fra en **rumsensor** med en PI-regulator.
+Styrer radiatortermostater (Tuya **TV02** og **TRV602** via Zigbee2MQTT, og andre TRV'er, der er en `climate`-entitet) ud fra en **rumsensor** med en PI-regulator, så rummet faktisk rammer målet.
 
-## Hvorfor Better Thermostat hænger på 21,5 °C
+## Hvorfor en TRV ikke rammer målet
 
-TV02 måler temperaturen lige ved den varme radiator. Better Thermostat retter for det ved at lægge forskellen mellem TRV-sensoren og rumsensoren oven i setpunktet. Det er en ren proportional korrektion, og en P-regulator ender altid med en fast restafvigelse. Ventilen skal stå lidt åben for at holde rummet varmt, og det kræver, at rummet er lidt *under* målet. Med TV02's 0,5 °C-trin lander det typisk på 21,5 °C.
+En TRV måler temperaturen lige ved den varme radiator, så den tror, rummet er varmere, end det er. Den almindelige løsning er at lægge forskellen mellem TRV-sensoren og rumsensoren oven i setpunktet. Det er en ren proportional korrektion, og en P-regulator ender altid med en fast restafvigelse. Ventilen skal stå lidt åben for at holde rummet varmt, og det kræver, at rummet er lidt *under* målet. Med TV02's 0,5 °C-trin lander det typisk på 21,5 °C, når målet er 22.
 
 Smart TRV tilføjer et **integralled**: så længe rummet er under målet, skubber den langsomt TRV-setpunktet op, indtil afvigelsen er 0.
 
-Det passer med stuen: om natten, når det er koldest udenfor og radiatoren skal give mest, falder den til ~21,3 °C. Om eftermiddagen er den tættere på målet. Afvigelsen vokser med varmebehovet, og det er netop P-reguleringens kendetegn.
+Afvigelsen ved ren offset-korrektion vokser med varmebehovet. Den er størst om natten, når det er koldest udenfor og radiatoren skal give mest.
 
 Simulering af en langsom stue med kolde nætter og et vindue åbnet 11:15–11:30 (`python tests/simulate_stue.py`), mål 22 °C:
 
 | | Døgnet (uden udluftning) |
 |---|---|
-| Better Thermostat-agtig | 21,39–22,01 °C |
+| Kun offset-korrektion (P) | 21,39–22,01 °C |
 | Smart TRV (PI) | 21,88–22,22 °C |
 
 TV02 kan ikke styres med ventilåbning i %, kun med et setpunkt. Integrationen regner derfor ventilen ud fra TV02's egen måling. Ligger setpunktet mindst 1 °C over det, TRV'en måler, står ventilen helt åben, og så lærer integralet ikke mere, for et højere setpunkt ændrer ikke noget. Det forhindrer, at en kold radiator om natten "pumper" det lærte offset op, så rummet bliver for varmt, når solen kommer. Er ventilen helt åben i over 2 timer, uden at TRV'en bliver varmere end rummet, skriver forklaringen, at radiatoren ikke bliver varm.
@@ -38,18 +38,26 @@ Tager en TRV ikke imod det setpunkt, Smart TRV sender (den viser stadig noget an
 
 ## Installation
 
-1. Kopiér mappen `custom_components/smart_trv` til `/config/custom_components/smart_trv` i Home Assistant.
-2. Genstart Home Assistant.
-3. **Indstillinger → Enheder og tjenester → Tilføj integration → "Smart TRV (PI)"**.
-4. Vælg rumsensor, en eller flere TV02'ere og eventuelt vinduessensorer.
+**Med HACS (anbefalet):**
+
+1. HACS → ⋮ → **Brugerdefinerede repositories** → tilføj `https://github.com/Tntdruid/ha-smart-trv`, kategori **Integration**.
+2. Søg efter **Smart TRV (PI)** i HACS → **Download**.
+3. Genstart Home Assistant.
+4. **Indstillinger → Enheder og tjenester → Tilføj integration → "Smart TRV (PI)"**.
+
+HACS giver besked, når der kommer en ny version.
+
+**Manuelt:** Kopiér mappen `custom_components/smart_trv` til `/config/custom_components/smart_trv` og genstart Home Assistant.
+
+Ved opsætningen vælger du rumsensor, en eller flere TRV'er og eventuelt vinduessensorer.
 
 Før du starter:
 
-- **Slå Better Thermostat fra for det rum** (slet eller deaktivér BT-entiteten). Ellers kæmper de to om TV02'en.
-- **Sæt `local_temperature_calibration` på TV02 til 0** i Zigbee2MQTT. BT kan have efterladt et offset. Det skader ikke, men så starter regulatoren fra et kendt udgangspunkt.
-- Integrationen sætter selv TV02 i preset `manual`, så den interne ugeplan ikke overskriver setpunktet.
+- **Slå anden styring af rummets TRV'er fra**, fx andre termostat-integrationer eller automationer, der sætter TRV'ens temperatur. Ellers kæmper de om den.
+- **Sæt `local_temperature_calibration` til 0** på TRV'erne i Zigbee2MQTT. Et gammelt offset fra en tidligere styring skader ikke, men så starter regulatoren fra et kendt udgangspunkt.
+- Integrationen sætter selv TRV'erne i preset `manual`, så deres interne ugeplan ikke overskriver setpunktet.
 
-Brug den nye `climate.<navn>`-entitet i dit dashboard og dine automationer i stedet for TV02'en direkte.
+Brug den nye `climate.<navn>`-entitet i dit dashboard og dine automationer i stedet for TRV'en direkte.
 
 ## Indstillinger (kan ændres under "Konfigurer")
 

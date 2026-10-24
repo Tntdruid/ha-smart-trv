@@ -50,6 +50,6 @@ def summary(name, hist):
 
 
 if __name__ == "__main__":
-    summary("Better Thermostat-ish", run("bt"))
+    summary("Offset only (P)", run("bt"))
     for ki in (0.5, 1.0, 2.0):
         summary(f"Smart TRV Ki={ki}", run("pi", ki=ki))

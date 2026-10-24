@@ -1,4 +1,4 @@
-"""Simulate a room with a TV02-like TRV: Better Thermostat-style offset vs the PI controller.
+"""Simulate a room with a TV02-like TRV: offset-only correction vs the PI controller.
 
 Run:  python tests/simulate.py
 """
@@ -57,9 +57,9 @@ def report(name, hist):
 
 if __name__ == "__main__":
     print(f"Target {TARGET} °C, TRV step {STEP} °C\n")
-    bt_avg, _ = report("Better Thermostat-ish", simulate("bt"))
+    bt_avg, _ = report("Offset only (P)", simulate("bt"))
     pi_avg, pi_peak = report("Smart TRV (PI)", simulate("pi"))
-    assert bt_avg < TARGET - 0.3, "model should reproduce the BT steady-state error"
+    assert bt_avg < TARGET - 0.3, "model should reproduce the offset-only steady-state error"
     assert abs(pi_avg - TARGET) < 0.15, "PI should settle on target"
     assert pi_peak < TARGET + 0.6, "PI should not overshoot much"
     print("\nOK")
