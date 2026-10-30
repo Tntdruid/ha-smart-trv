@@ -27,10 +27,12 @@ class PIController:
     # Big errors (after airing, a new target) are P's job; integrating them at full
     # weight winds up and overshoots hours later. They count as at most this much.
     integral_band: float = 0.3
-    # When the TRV setpoint is this far from what the TRV itself measures, its valve is
-    # already fully open (or closed). Moving the setpoint further changes nothing, so
-    # don't learn from it: that's how a cold radiator at night winds up the integral.
-    valve_margin: float = 1.0
+    # Without a valve position from the TRV: when the TRV setpoint is this far from what the
+    # TRV itself measures, its valve is taken as fully open (or closed). Moving the setpoint
+    # further changes nothing, so don't learn from it: that's how a cold radiator at night
+    # winds up the integral. 1 °C was too tight for lukewarm radiators with a TRV that opens
+    # gradually: the integral froze and the room stayed under target.
+    valve_margin: float = 2.0
     # Keep the last setpoint until the new one is at least this far away. Without it, sensor
     # noise flips the setpoint between two steps and the TRV motor runs every few minutes.
     hysteresis: float = 0.0
@@ -54,6 +56,7 @@ class PIController:
         dt_hours: float,
         trv_temp: float | None = None,
         feedforward: float = 0.0,
+        valve_position: float | None = None,
     ) -> float:
         """Return the TRV setpoint, rounded to the TRV's step.
 
@@ -64,7 +67,12 @@ class PIController:
         p = self.kp * self.error
 
         self.valve_saturated = False
-        if trv_temp is not None:
+        if valve_position is not None:
+            # The TRV says how open it is (TRV602): trust it over any guess.
+            self.valve_saturated = (valve_position >= 95 and self.error > 0) or (
+                valve_position <= 5 and self.error < 0
+            )
+        elif trv_temp is not None:
             current = target + p + self.integral + feedforward
             self.valve_saturated = (
                 current - trv_temp >= self.valve_margin and self.error > 0

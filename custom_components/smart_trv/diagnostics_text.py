@@ -49,6 +49,8 @@ def _explain_control(diag: dict[str, Any], room: float | None, target: float | N
         where = f"Rummet er {_c(-error)} over målet ({_c(room)} af {_c(target)})"
 
     valve = "ventilen er åben" if status == STATUS_HEATING else "ventilen er lukket"
+    if (position := diag.get("valve_position")) is not None:
+        valve = f"ventilen står {position} % åben"
     per_trv = diag.get("trv_temperatures") or {}
     reads = (
         f"TRV'erne måler i snit {_c(diag['trv_temperature'])} ("

@@ -201,6 +201,7 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
 
         # TRV health: battery sensors found through the device registry; trv -> problem text.
         self._battery_entities: dict[str, str] = {}
+        self._position_entities: dict[str, str] = {}  # valve opening in %, e.g. TRV602
         self._problems: dict[str, str] = {}
 
     # ----------------------------------------------------------------- lifecycle
@@ -254,7 +255,8 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
         self.async_on_remove(
             async_track_state_change_event(
                 self.hass,
-                [*self._trvs, *self._battery_entities.values()],  # battery drops show at once
+                # battery drops and valve moves show at once
+                [*self._trvs, *self._battery_entities.values(), *self._position_entities.values()],
                 self._async_trv_changed,
             )
         )
@@ -360,7 +362,8 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
             self._ff_migrated = True
 
         self._trv_setpoint = self._pi.update(
-            target, room, dt_hours, self._average_trv_temperature(), self._ff
+            target, room, dt_hours, self._average_trv_temperature(), self._ff,
+            self._valve_position(),
         )
         self._learn(now, room, target, dt_hours)
         # Track how long the TRV has been asked for full heat, to spot a radiator that stays cold.
@@ -471,6 +474,7 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
             "trv_setpoint": self._trv_setpoint,
             "trv_temperature": trv_temp,
             "trv_temperatures": self._trv_temperatures(),
+            "valve_position": self._valve_position(),
             "rejected": dict(self._rejected),
             "window_pending": self._window_pending,
             "window_seconds_left": (
@@ -566,16 +570,27 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
         self._last_target = target
 
     def _find_battery_entities(self) -> None:
+        """Battery and valve-position sensors of each TRV, found through its device."""
         reg = er.async_get(self.hass)
         for trv in self._trvs:
             if (entry := reg.async_get(trv)) is None or entry.device_id is None:
                 continue
             for other in er.async_entries_for_device(reg, entry.device_id):
-                if other.domain == "sensor" and (
-                    other.device_class or other.original_device_class
-                ) == "battery":
-                    self._battery_entities[trv] = other.entity_id
-                    break
+                if other.domain != "sensor":
+                    continue
+                if (other.device_class or other.original_device_class) == "battery":
+                    self._battery_entities.setdefault(trv, other.entity_id)
+                elif other.entity_id.endswith("_position") or (
+                    other.unique_id or ""
+                ).endswith("_position"):
+                    self._position_entities.setdefault(trv, other.entity_id)
+
+    def _valve_position(self) -> float | None:
+        """Average valve opening in %, only when every TRV in the room reports one."""
+        positions = [self._read_float(self._position_entities.get(trv, "")) for trv in self._trvs]
+        if not positions or any(p is None for p in positions):
+            return None
+        return round(sum(positions) / len(positions))
 
     def _check_trvs(self) -> dict[str, str]:
         """Problems per TRV: offline, silent for hours, or low battery."""

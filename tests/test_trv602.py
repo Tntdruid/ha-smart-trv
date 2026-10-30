@@ -195,3 +195,24 @@ async def test_trv_reporting_auto_is_left_alone(hass: HomeAssistant, trv_calls, 
     await hass.async_block_till_done()
     assert last(trv_calls, "set_preset_mode") == {"preset_mode": "off"}
     assert last(trv_calls, "set_hvac_mode") is None
+
+
+async def test_uses_trv602_valve_position(hass: HomeAssistant, trv_calls) -> None:  # noqa: F811
+    from homeassistant.helpers import device_registry as dr, entity_registry as er
+
+    z2m = MockConfigEntry(domain="mqtt")
+    z2m.add_to_hass(hass)
+    device = dr.async_get(hass).async_get_or_create(
+        config_entry_id=z2m.entry_id, identifiers={("mqtt", "trv602_stue")}
+    )
+    reg = er.async_get(hass)
+    reg.async_get_or_create("climate", "mqtt", "trv602", device_id=device.id, suggested_object_id="trv602_stue")
+    reg.async_get_or_create(
+        "sensor", "mqtt", "0xabc_position", device_id=device.id, suggested_object_id="trv602_stue_position"
+    )
+    hass.states.async_set("sensor.trv602_stue_position", "40")
+    await setup_trv602(hass, preset="manual", action="heating", local=21.6, setpoint=22.5)
+
+    attrs = hass.states.get(ENTITY).attributes
+    assert "ventilen står 40 % åben" in hass.states.get("sensor.stue_status").attributes["explanation"]
+    assert attrs["pi_integral"] is not None

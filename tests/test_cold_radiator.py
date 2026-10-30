@@ -51,3 +51,25 @@ async def test_warns_when_radiator_stays_cold(hass: HomeAssistant, trv_calls, fr
     explanation = hass.states.get("sensor.stue_status").attributes["explanation"]
     assert "radiatoren bliver ikke varm" in explanation
     assert float(hass.states.get("sensor.stue_integral").state) == start  # didn't wind up
+
+
+def test_valve_position_decides_when_reported() -> None:
+    """Alrum/Stue, 30 Oct: lukewarm radiator, TRV only ~1 °C above the room while its valve is
+    part open. With the TRV's own position Smart TRV keeps learning; at 100 % it stops."""
+    pi = PIController(kp=3.0, ki=1.0, max_boost=6.0, max_cut=3.0)
+    for _ in range(24):
+        pi.update(21.5, 21.2, 5 / 60, trv_temp=19.0, valve_position=40)  # far below, but only 40 %
+    assert not pi.valve_saturated and pi.integral > 0.3
+
+    frozen = pi.integral
+    for _ in range(24):
+        pi.update(21.5, 21.2, 5 / 60, trv_temp=22.0, valve_position=100)  # really fully open
+    assert pi.valve_saturated and pi.integral == frozen
+
+
+def test_lukewarm_trv_without_position_keeps_learning() -> None:
+    """Without a position: setpoint 1.3 °C above the TRV reading is not 'fully open' any more."""
+    pi = PIController(kp=3.0, ki=1.0, max_boost=6.0, max_cut=3.0)
+    for _ in range(24):
+        pi.update(21.5, 21.2, 5 / 60, trv_temp=21.6)  # setpoint ~22.4 -> 0.8-1.3 above
+    assert not pi.valve_saturated and pi.integral > 0.3
