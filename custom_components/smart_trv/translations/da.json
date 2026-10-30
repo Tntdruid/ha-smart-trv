@@ -8,33 +8,37 @@
           "room_sensor": "Rumtemperatur-sensor",
           "trvs": "Radiatortermostater (TRV)",
           "windows": "Vindue-/dørsensorer",
-          "kp": "Kp",
-          "ki": "Ki",
-          "max_boost": "Max TRV-boost over mål",
-          "max_cut": "Max TRV-sænkning under mål",
-          "trv_step": "TRV-trin",
-          "interval": "Reguleringsinterval",
           "night_entity": "Natplan",
           "window_open_delay": "Sluk efter åben (sek.)",
           "window_close_delay": "Tænd igen efter lukket (sek.)",
           "outdoor_sensor": "Udetemperatur",
-          "outdoor_gain": "Udetemperatur-kompensering",
-          "preheat": "Forvarm før natten slutter",
-          "auto_tune": "Automatisk tuning af Kp/Ki"
+          "preheat": "Forvarm før natten slutter"
         },
         "data_description": {
           "room_sensor": "Sensoren der måler den temperatur, du faktisk vil styre efter.",
-          "kp": "Hvor kraftigt der reageres på den aktuelle afvigelse (TRV °C pr. rum °C). Standard 3,0.",
-          "ki": "Hvor hurtigt den resterende afvigelse læres (°C pr. °C·time). Højere fjerner de sidste 0,5 °C hurtigere, men kan give overshoot. Standard 1,0.",
-          "max_boost": "Hvor langt over målet TRV'ens setpunkt må gå for at presse varme ind.",
-          "trv_step": "TV02 tager 0,5 °C trin.",
           "night_entity": "En tidsplan (schedule), input_boolean eller binary_sensor. Når den er tændt, bruger rummet sin nattemperatur (indstilles på enhedssiden eller dashboardet).",
           "window_open_delay": "Hvor længe et vindue eller en dør skal stå åben, før TRV'erne slukkes. En dør, man går igennem, skal ikke slukke varmen. Standard 60.",
           "window_close_delay": "Hvor længe der skal være lukket, før varmen starter igen. Standard 0.",
           "outdoor_sensor": "Valgfri. Så kan Smart TRV reagere på kolde nætter, før rummet bliver koldt.",
-          "outdoor_gain": "Ekstra TRV-°C pr. °C mellem rummets mål og udetemperaturen. 0 slår det fra. Standard 0,1.",
-          "preheat": "Lærer hvor hurtigt rummet varmer op og starter tidligt nok til, at det er varmt, når natplanen slutter. Kræver en tidsplan som natplan.",
-          "auto_tune": "En gang i døgnet: sænk Kp/Ki hvis rummet svingede, hæv Ki hvis det lå ved siden af målet."
+          "preheat": "Lærer hvor hurtigt rummet varmer op og starter tidligt nok til, at det er varmt, når natplanen slutter. Kræver en tidsplan som natplan."
+        },
+        "sections": {
+          "advanced": {
+            "name": "Avanceret",
+            "description": "Behøves ikke: Kp/Ki tuner sig selv, og resten er fast eller aflæses fra TRV'en. Kp/Ki her er kun startværdien for den automatiske tuning.",
+            "data": {
+              "auto_tune": "Automatisk tuning af Kp/Ki",
+              "kp": "Kp",
+              "ki": "Ki",
+              "outdoor_gain": "Udetemperatur-kompensering"
+            },
+            "data_description": {
+              "auto_tune": "En gang i døgnet: sænk Kp/Ki hvis rummet svingede, hæv Ki hvis det lå ved siden af målet.",
+              "kp": "Startværdi. Den automatiske tuning justerer den en gang i døgnet (se kp på klimaentiteten). Standard 3,0.",
+              "ki": "Startværdi. Den automatiske tuning justerer den en gang i døgnet (se ki på klimaentiteten). Standard 1,0.",
+              "outdoor_gain": "Ekstra TRV-°C pr. °C mellem rummets mål og udetemperaturen. 0 slår det fra. Standard 0,1."
+            }
+          }
         }
       }
     }
@@ -47,33 +51,37 @@
           "room_sensor": "Rumtemperatur-sensor",
           "trvs": "Radiatortermostater (TRV)",
           "windows": "Vindue-/dørsensorer",
-          "kp": "Kp",
-          "ki": "Ki",
-          "max_boost": "Max TRV-boost over mål",
-          "max_cut": "Max TRV-sænkning under mål",
-          "trv_step": "TRV-trin",
-          "interval": "Reguleringsinterval",
           "night_entity": "Natplan",
           "window_open_delay": "Sluk efter åben (sek.)",
           "window_close_delay": "Tænd igen efter lukket (sek.)",
           "outdoor_sensor": "Udetemperatur",
-          "outdoor_gain": "Udetemperatur-kompensering",
-          "preheat": "Forvarm før natten slutter",
-          "auto_tune": "Automatisk tuning af Kp/Ki"
+          "preheat": "Forvarm før natten slutter"
         },
         "data_description": {
           "room_sensor": "Sensoren der måler den temperatur, du faktisk vil styre efter.",
-          "kp": "Hvor kraftigt der reageres på den aktuelle afvigelse (TRV °C pr. rum °C). Standard 3,0.",
-          "ki": "Hvor hurtigt den resterende afvigelse læres (°C pr. °C·time). Højere fjerner de sidste 0,5 °C hurtigere, men kan give overshoot. Standard 1,0.",
-          "max_boost": "Hvor langt over målet TRV'ens setpunkt må gå for at presse varme ind.",
-          "trv_step": "TV02 tager 0,5 °C trin.",
           "night_entity": "En tidsplan (schedule), input_boolean eller binary_sensor. Når den er tændt, bruger rummet sin nattemperatur (indstilles på enhedssiden eller dashboardet).",
           "window_open_delay": "Hvor længe et vindue eller en dør skal stå åben, før TRV'erne slukkes. En dør, man går igennem, skal ikke slukke varmen. Standard 60.",
           "window_close_delay": "Hvor længe der skal være lukket, før varmen starter igen. Standard 0.",
           "outdoor_sensor": "Valgfri. Så kan Smart TRV reagere på kolde nætter, før rummet bliver koldt.",
-          "outdoor_gain": "Ekstra TRV-°C pr. °C mellem rummets mål og udetemperaturen. 0 slår det fra. Standard 0,1.",
-          "preheat": "Lærer hvor hurtigt rummet varmer op og starter tidligt nok til, at det er varmt, når natplanen slutter. Kræver en tidsplan som natplan.",
-          "auto_tune": "En gang i døgnet: sænk Kp/Ki hvis rummet svingede, hæv Ki hvis det lå ved siden af målet."
+          "preheat": "Lærer hvor hurtigt rummet varmer op og starter tidligt nok til, at det er varmt, når natplanen slutter. Kræver en tidsplan som natplan."
+        },
+        "sections": {
+          "advanced": {
+            "name": "Avanceret",
+            "description": "Behøves ikke: Kp/Ki tuner sig selv, og resten er fast eller aflæses fra TRV'en. Kp/Ki her er kun startværdien for den automatiske tuning.",
+            "data": {
+              "auto_tune": "Automatisk tuning af Kp/Ki",
+              "kp": "Kp",
+              "ki": "Ki",
+              "outdoor_gain": "Udetemperatur-kompensering"
+            },
+            "data_description": {
+              "auto_tune": "En gang i døgnet: sænk Kp/Ki hvis rummet svingede, hæv Ki hvis det lå ved siden af målet.",
+              "kp": "Startværdi. Den automatiske tuning justerer den en gang i døgnet (se kp på klimaentiteten). Standard 3,0.",
+              "ki": "Startværdi. Den automatiske tuning justerer den en gang i døgnet (se ki på klimaentiteten). Standard 1,0.",
+              "outdoor_gain": "Ekstra TRV-°C pr. °C mellem rummets mål og udetemperaturen. 0 slår det fra. Standard 0,1."
+            }
+          }
         }
       }
     }

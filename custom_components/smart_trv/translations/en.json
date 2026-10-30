@@ -8,33 +8,37 @@
           "room_sensor": "Room temperature sensor",
           "trvs": "Radiator thermostats (TRVs)",
           "windows": "Window/door sensors",
-          "kp": "Kp",
-          "ki": "Ki",
-          "max_boost": "Max TRV boost above target",
-          "max_cut": "Max TRV cut below target",
-          "trv_step": "TRV setpoint step",
-          "interval": "Control interval",
           "night_entity": "Night schedule",
           "window_open_delay": "Turn off after open (s)",
           "window_close_delay": "Back on after closed (s)",
           "outdoor_sensor": "Outdoor temperature",
-          "outdoor_gain": "Outdoor compensation",
-          "preheat": "Preheat before the night ends",
-          "auto_tune": "Auto-tune Kp/Ki"
+          "preheat": "Preheat before the night ends"
         },
         "data_description": {
           "room_sensor": "The sensor that measures the temperature you actually care about.",
-          "kp": "How hard to react to the current error (TRV °C per room °C). Default 3.0.",
-          "ki": "How fast to learn the remaining offset (°C per °C·hour). Higher removes the last 0.5 °C faster but can overshoot. Default 1.0.",
-          "max_boost": "How far above your target the TRV setpoint may go to push heat in.",
-          "trv_step": "TV02 accepts 0.5 °C steps.",
           "night_entity": "A schedule, input_boolean or binary_sensor. While it is on, the room uses its night temperature (set on the device page or the dashboard).",
           "window_open_delay": "How long a window or door must stay open before the TRVs turn off. Walking through a door shouldn't turn the heating off. Default 60.",
           "window_close_delay": "How long it must stay closed before heating resumes. Default 0.",
           "outdoor_sensor": "Optional. Lets Smart TRV react to cold nights before the room cools down.",
-          "outdoor_gain": "Extra TRV °C per °C between room target and outdoors. 0 turns it off. Default 0.1.",
-          "preheat": "Learns how fast the room warms and starts early, so it is warm when the night schedule ends. Needs a schedule as night schedule.",
-          "auto_tune": "Once a day: lower Kp/Ki if the room oscillated, raise Ki if it stayed off target."
+          "preheat": "Learns how fast the room warms and starts early, so it is warm when the night schedule ends. Needs a schedule as night schedule."
+        },
+        "sections": {
+          "advanced": {
+            "name": "Advanced",
+            "description": "Not needed: Kp/Ki tune themselves and the rest is fixed or read from the TRV. Kp/Ki here are only the starting point for auto-tuning.",
+            "data": {
+              "auto_tune": "Auto-tune Kp/Ki",
+              "kp": "Kp",
+              "ki": "Ki",
+              "outdoor_gain": "Outdoor compensation"
+            },
+            "data_description": {
+              "auto_tune": "Once a day: lower Kp/Ki if the room oscillated, raise Ki if it stayed off target.",
+              "kp": "Starting value. Auto-tuning adjusts it once a day (see kp on the climate entity). Default 3.0.",
+              "ki": "Starting value. Auto-tuning adjusts it once a day (see ki on the climate entity). Default 1.0.",
+              "outdoor_gain": "Extra TRV °C per °C between room target and outdoors. 0 turns it off. Default 0.1."
+            }
+          }
         }
       }
     }
@@ -47,33 +51,37 @@
           "room_sensor": "Room temperature sensor",
           "trvs": "Radiator thermostats (TRVs)",
           "windows": "Window/door sensors",
-          "kp": "Kp",
-          "ki": "Ki",
-          "max_boost": "Max TRV boost above target",
-          "max_cut": "Max TRV cut below target",
-          "trv_step": "TRV setpoint step",
-          "interval": "Control interval",
           "night_entity": "Night schedule",
           "window_open_delay": "Turn off after open (s)",
           "window_close_delay": "Back on after closed (s)",
           "outdoor_sensor": "Outdoor temperature",
-          "outdoor_gain": "Outdoor compensation",
-          "preheat": "Preheat before the night ends",
-          "auto_tune": "Auto-tune Kp/Ki"
+          "preheat": "Preheat before the night ends"
         },
         "data_description": {
           "room_sensor": "The sensor that measures the temperature you actually care about.",
-          "kp": "How hard to react to the current error (TRV °C per room °C). Default 3.0.",
-          "ki": "How fast to learn the remaining offset (°C per °C·hour). Higher removes the last 0.5 °C faster but can overshoot. Default 1.0.",
-          "max_boost": "How far above your target the TRV setpoint may go to push heat in.",
-          "trv_step": "TV02 accepts 0.5 °C steps.",
           "night_entity": "A schedule, input_boolean or binary_sensor. While it is on, the room uses its night temperature (set on the device page or the dashboard).",
           "window_open_delay": "How long a window or door must stay open before the TRVs turn off. Walking through a door shouldn't turn the heating off. Default 60.",
           "window_close_delay": "How long it must stay closed before heating resumes. Default 0.",
           "outdoor_sensor": "Optional. Lets Smart TRV react to cold nights before the room cools down.",
-          "outdoor_gain": "Extra TRV °C per °C between room target and outdoors. 0 turns it off. Default 0.1.",
-          "preheat": "Learns how fast the room warms and starts early, so it is warm when the night schedule ends. Needs a schedule as night schedule.",
-          "auto_tune": "Once a day: lower Kp/Ki if the room oscillated, raise Ki if it stayed off target."
+          "preheat": "Learns how fast the room warms and starts early, so it is warm when the night schedule ends. Needs a schedule as night schedule."
+        },
+        "sections": {
+          "advanced": {
+            "name": "Advanced",
+            "description": "Not needed: Kp/Ki tune themselves and the rest is fixed or read from the TRV. Kp/Ki here are only the starting point for auto-tuning.",
+            "data": {
+              "auto_tune": "Auto-tune Kp/Ki",
+              "kp": "Kp",
+              "ki": "Ki",
+              "outdoor_gain": "Outdoor compensation"
+            },
+            "data_description": {
+              "auto_tune": "Once a day: lower Kp/Ki if the room oscillated, raise Ki if it stayed off target.",
+              "kp": "Starting value. Auto-tuning adjusts it once a day (see kp on the climate entity). Default 3.0.",
+              "ki": "Starting value. Auto-tuning adjusts it once a day (see ki on the climate entity). Default 1.0.",
+              "outdoor_gain": "Extra TRV °C per °C between room target and outdoors. 0 turns it off. Default 0.1."
+            }
+          }
         }
       }
     }

@@ -59,16 +59,18 @@ Før du starter:
 
 Brug den nye `climate.<navn>`-entitet i dit dashboard og dine automationer i stedet for TRV'en direkte.
 
-## Indstillinger (kan ændres under "Konfigurer")
+## Indstillinger
 
-| Felt | Standard | Betydning |
-|---|---|---|
-| Kp | 3,0 | Hvor kraftigt der reageres på afvigelsen lige nu |
-| Ki | 1,0 | Hvor hurtigt den sidste rest læres. Op = hurtigere, men mere overshoot |
-| Max boost | 6 °C | Hvor langt over målet TRV-setpunktet må gå |
-| Max sænkning | 3 °C | Hvor langt under målet TRV-setpunktet må gå |
-| TRV-trin | 0,5 °C | TV02 tager kun halve grader |
-| Interval | 5 min | Hvor tit der reguleres. Nye målinger fra rumsensoren vises med det samme, men TRV'en får kun nyt setpunkt ved reguleringen, og kun når det er flyttet mindst ét TRV-trin. Det holder motoren i ro: ca. 20 ændringer i døgnet i stedet for flere hundrede (`python tests/simulate_chatter.py`) |
+Du vælger kun det, der beskriver huset: rumsensor, TRV'er, vinduer/døre med timere, natplan, udesensor og forvarmning til/fra. Så sætter du målet, fx 22 °C, og Smart TRV klarer resten:
+
+| Hvad | Hvordan |
+|---|---|
+| Kp og Ki | Tuner sig selv en gang i døgnet (se `kp`, `ki` og `last_tuning` på klimaentiteten) |
+| TRV-trin | Aflæses fra TRV'en (`target_temp_step`), ellers 0,5 °C |
+| Max boost / sænkning | Fast 6 °C over og 3 °C under målet |
+| Interval | Fast 5 min. Nye målinger vises med det samme, men TRV'en får kun nyt setpunkt ved reguleringen, og kun når det har flyttet sig mindst ét TRV-trin. Det holder motoren i ro: ca. 20 ændringer i døgnet i stedet for flere hundrede (`python tests/simulate_chatter.py`) |
+
+Under den sammenklappede **Avanceret**-sektion kan man slå tuningen fra og ændre startværdierne for Kp/Ki og styrken af udetemperatur-kompenseringen. Det behøver man ikke.
 
 ## Vinduer og døre
 

@@ -1,4 +1,9 @@
-"""Config flow for Smart TRV."""
+"""Config flow for Smart TRV.
+
+Only what describes the house is asked: sensors, TRVs, windows, night schedule. Control
+details tune themselves (Kp/Ki), are read from the TRV (setpoint step) or are fixed; the few
+that can be overridden sit in a collapsed "advanced" section.
+"""
 
 from __future__ import annotations
 
@@ -9,39 +14,34 @@ import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.const import CONF_NAME
 from homeassistant.core import callback
+from homeassistant.data_entry_flow import section
 from homeassistant.helpers import selector
 
 from .const import (
     CONF_AUTO_TUNE,
-    CONF_INTERVAL,
+    CONF_KI,
+    CONF_KP,
+    CONF_NIGHT_ENTITY,
     CONF_OUTDOOR_GAIN,
     CONF_OUTDOOR_SENSOR,
     CONF_PREHEAT,
-    DEFAULT_AUTO_TUNE,
-    DEFAULT_OUTDOOR_GAIN,
-    DEFAULT_PREHEAT,
-    CONF_KI,
-    CONF_KP,
-    CONF_MAX_BOOST,
-    CONF_MAX_CUT,
-    CONF_NIGHT_ENTITY,
     CONF_ROOM_SENSOR,
-    CONF_TRV_STEP,
     CONF_TRVS,
     CONF_WINDOW_CLOSE_DELAY,
     CONF_WINDOW_OPEN_DELAY,
     CONF_WINDOWS,
-    DEFAULT_INTERVAL,
+    DEFAULT_AUTO_TUNE,
     DEFAULT_KI,
     DEFAULT_KP,
-    DEFAULT_MAX_BOOST,
-    DEFAULT_MAX_CUT,
     DEFAULT_NAME,
-    DEFAULT_TRV_STEP,
+    DEFAULT_OUTDOOR_GAIN,
+    DEFAULT_PREHEAT,
     DEFAULT_WINDOW_CLOSE_DELAY,
     DEFAULT_WINDOW_OPEN_DELAY,
     DOMAIN,
 )
+
+ADVANCED = "advanced"
 
 
 def _number(min_v: float, max_v: float, step: float, unit: str | None = None):
@@ -53,7 +53,7 @@ def _number(min_v: float, max_v: float, step: float, unit: str | None = None):
     return selector.NumberSelector(config)
 
 
-def _entities_schema(defaults: dict[str, Any]) -> dict:
+def _room_schema(defaults: dict[str, Any]) -> dict:
     return {
         vol.Required(CONF_ROOM_SENSOR, default=defaults.get(CONF_ROOM_SENSOR, vol.UNDEFINED)):
             selector.EntitySelector(
@@ -84,28 +84,32 @@ def _entities_schema(defaults: dict[str, Any]) -> dict:
         ): selector.EntitySelector(
             selector.EntitySelectorConfig(domain="sensor", device_class="temperature")
         ),
-    }
-
-
-def _tuning_schema(defaults: dict[str, Any]) -> dict:
-    return {
-        vol.Required(CONF_KP, default=defaults.get(CONF_KP, DEFAULT_KP)): _number(0, 10, 0.1),
-        vol.Required(CONF_KI, default=defaults.get(CONF_KI, DEFAULT_KI)): _number(0, 10, 0.1),
-        vol.Required(CONF_MAX_BOOST, default=defaults.get(CONF_MAX_BOOST, DEFAULT_MAX_BOOST)):
-            _number(0, 15, 0.5, "°C"),
-        vol.Required(CONF_MAX_CUT, default=defaults.get(CONF_MAX_CUT, DEFAULT_MAX_CUT)):
-            _number(0, 10, 0.5, "°C"),
-        vol.Required(CONF_TRV_STEP, default=defaults.get(CONF_TRV_STEP, DEFAULT_TRV_STEP)):
-            _number(0.1, 1, 0.1, "°C"),
-        vol.Required(CONF_INTERVAL, default=defaults.get(CONF_INTERVAL, DEFAULT_INTERVAL)):
-            _number(1, 30, 1, "min"),
-        vol.Required(CONF_OUTDOOR_GAIN, default=defaults.get(CONF_OUTDOOR_GAIN, DEFAULT_OUTDOOR_GAIN)):
-            _number(0, 0.5, 0.05),
         vol.Required(CONF_PREHEAT, default=defaults.get(CONF_PREHEAT, DEFAULT_PREHEAT)):
             selector.BooleanSelector(),
-        vol.Required(CONF_AUTO_TUNE, default=defaults.get(CONF_AUTO_TUNE, DEFAULT_AUTO_TUNE)):
-            selector.BooleanSelector(),
+        vol.Required(ADVANCED): section(
+            vol.Schema(
+                {
+                    vol.Required(CONF_AUTO_TUNE, default=defaults.get(CONF_AUTO_TUNE, DEFAULT_AUTO_TUNE)):
+                        selector.BooleanSelector(),
+                    vol.Required(CONF_KP, default=defaults.get(CONF_KP, DEFAULT_KP)):
+                        _number(0, 10, 0.1),
+                    vol.Required(CONF_KI, default=defaults.get(CONF_KI, DEFAULT_KI)):
+                        _number(0, 10, 0.1),
+                    vol.Required(
+                        CONF_OUTDOOR_GAIN, default=defaults.get(CONF_OUTDOOR_GAIN, DEFAULT_OUTDOOR_GAIN)
+                    ): _number(0, 0.5, 0.05),
+                }
+            ),
+            {"collapsed": True},
+        ),
     }
+
+
+def _flatten(user_input: dict[str, Any]) -> dict[str, Any]:
+    """Store the advanced section's fields next to the others, as before."""
+    data = dict(user_input)
+    data.update(data.pop(ADVANCED, None) or {})
+    return data
 
 
 class SmartTRVConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -113,14 +117,11 @@ class SmartTRVConfigFlow(ConfigFlow, domain=DOMAIN):
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is not None:
-            return self.async_create_entry(title=user_input[CONF_NAME], data=user_input)
+            data = _flatten(user_input)
+            return self.async_create_entry(title=data[CONF_NAME], data=data)
 
         schema = vol.Schema(
-            {
-                vol.Required(CONF_NAME, default=DEFAULT_NAME): selector.TextSelector(),
-                **_entities_schema({}),
-                **_tuning_schema({}),
-            }
+            {vol.Required(CONF_NAME, default=DEFAULT_NAME): selector.TextSelector(), **_room_schema({})}
         )
         return self.async_show_form(step_id="user", data_schema=schema)
 
@@ -133,11 +134,11 @@ class SmartTRVConfigFlow(ConfigFlow, domain=DOMAIN):
 class SmartTRVOptionsFlow(OptionsFlow):
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is not None:
+            data = _flatten(user_input)
             # A cleared field is left out of user_input; store None so it overrides entry.data.
-            user_input.setdefault(CONF_NIGHT_ENTITY, None)
-            user_input.setdefault(CONF_OUTDOOR_SENSOR, None)
-            return self.async_create_entry(data=user_input)
+            data.setdefault(CONF_NIGHT_ENTITY, None)
+            data.setdefault(CONF_OUTDOOR_SENSOR, None)
+            return self.async_create_entry(data=data)
 
         current = {**self.config_entry.data, **self.config_entry.options}
-        schema = vol.Schema({**_entities_schema(current), **_tuning_schema(current)})
-        return self.async_show_form(step_id="init", data_schema=schema)
+        return self.async_show_form(step_id="init", data_schema=vol.Schema(_room_schema(current)))

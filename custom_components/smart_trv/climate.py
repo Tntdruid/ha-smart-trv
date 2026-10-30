@@ -52,18 +52,14 @@ from .const import (
     ATTR_INTEGRAL,
     ATTR_TRV_SETPOINT,
     ATTR_WINDOW_OPEN,
-    CONF_INTERVAL,
     CONF_KI,
     CONF_KP,
-    CONF_MAX_BOOST,
     CONF_AUTO_TUNE,
-    CONF_MAX_CUT,
     CONF_OUTDOOR_GAIN,
     CONF_OUTDOOR_SENSOR,
     CONF_PREHEAT,
     CONF_NIGHT_ENTITY,
     CONF_ROOM_SENSOR,
-    CONF_TRV_STEP,
     CONF_TRVS,
     CONF_WINDOW_CLOSE_DELAY,
     CONF_WINDOW_OPEN_DELAY,
@@ -151,14 +147,16 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
         self._window_timer: CALLBACK_TYPE | None = None
         self._window_pending: str | None = None  # "off" or "on" while a delay runs
         self._window_deadline: datetime | None = None
-        self._interval = timedelta(minutes=conf.get(CONF_INTERVAL, DEFAULT_INTERVAL))
+        # Fixed, tested values: these are not settings any more (an old stored max_boost of 2
+        # kept a lukewarm room under target). The TRV step is read from the TRVs themselves.
+        self._interval = timedelta(minutes=DEFAULT_INTERVAL)
         self._pi = PIController(
             kp=conf.get(CONF_KP, DEFAULT_KP),
             ki=conf.get(CONF_KI, DEFAULT_KI),
-            max_boost=conf.get(CONF_MAX_BOOST, DEFAULT_MAX_BOOST),
-            max_cut=conf.get(CONF_MAX_CUT, DEFAULT_MAX_CUT),
-            step=conf.get(CONF_TRV_STEP, DEFAULT_TRV_STEP),
-            hysteresis=conf.get(CONF_TRV_STEP, DEFAULT_TRV_STEP),
+            max_boost=DEFAULT_MAX_BOOST,
+            max_cut=DEFAULT_MAX_CUT,
+            step=DEFAULT_TRV_STEP,
+            hysteresis=DEFAULT_TRV_STEP,
             min_temp=TRV_MIN_TEMP,
             max_temp=TRV_MAX_TEMP,
         )
@@ -236,6 +234,7 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
                 self._tuner.last_change = last.attributes.get(ATTR_LAST_TUNING)
 
         self._find_battery_entities()
+        self._detect_trv_step()
         self._attr_current_temperature = self._read_float(self._room_sensor)
         self._window_off = self._any_window_open()  # already open at startup: no delay
         self.async_on_remove(self._cancel_window_timer)
@@ -356,6 +355,7 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
             dt_hours = min((now - self._last_run).total_seconds() / 3600, MAX_DT_HOURS)
         self._last_run = now
 
+        self._detect_trv_step()  # TRVs may come up after us (MQTT discovery)
         self._ff = self._outdoor_feedforward(target)
         if not self._ff_migrated and self._outdoor_sensor:
             self._pi.integral -= self._ff  # it already contained this load; avoid a jump
@@ -584,6 +584,17 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
                     other.unique_id or ""
                 ).endswith("_position"):
                     self._position_entities.setdefault(trv, other.entity_id)
+
+    def _detect_trv_step(self) -> None:
+        """Use the coarsest setpoint step any of the room's TRVs reports (TV02: 0.5 °C)."""
+        steps = [
+            float(step)
+            for trv in self._trvs
+            if (s := self.hass.states.get(trv)) is not None
+            and (step := s.attributes.get("target_temp_step")) is not None
+        ]
+        step = max(steps) if steps else DEFAULT_TRV_STEP
+        self._pi.step = self._pi.hysteresis = step
 
     def _valve_position(self) -> float | None:
         """Average valve opening in %, only when every TRV in the room reports one."""

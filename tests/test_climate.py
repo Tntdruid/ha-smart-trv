@@ -22,6 +22,18 @@ USER_INPUT = {
 }
 ENTITY = "climate.stue"
 
+ADVANCED_KEYS = ("auto_tune", "kp", "ki", "outdoor_gain")
+REMOVED_KEYS = ("max_boost", "max_cut", "trv_step", "interval")  # no longer settings
+
+
+def flow_input(data: dict, drop_name: bool = False) -> dict:
+    """What the settings form sends: advanced fields in their section, removed ones gone."""
+    out = {k: v for k, v in data.items() if k not in ADVANCED_KEYS + REMOVED_KEYS}
+    if drop_name:
+        out.pop("name", None)
+    out["advanced"] = {k: v for k, v in data.items() if k in ADVANCED_KEYS}
+    return out
+
 
 @pytest.fixture
 def trv_calls():
@@ -113,3 +125,20 @@ async def test_reset_integral_service(hass: HomeAssistant, trv_calls) -> None:
     await hass.services.async_call("smart_trv", "reset_integral", {"entity_id": ENTITY}, blocking=True)
     await hass.async_block_till_done()
     assert "pi_integral" in hass.states.get(ENTITY).attributes
+
+
+async def test_trv_step_read_from_the_trv(hass: HomeAssistant, trv_calls) -> None:
+    hass.states.async_set("sensor.stue_temperatur", "21.3")
+    hass.states.async_set(
+        "climate.tv02_stue", "heat",
+        {"current_temperature": 22.0, "temperature": 22, "target_temp_step": 1.0},
+    )
+    entry = MockConfigEntry(domain="smart_trv", data=USER_INPUT)
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    await hass.services.async_call(
+        "climate", "set_temperature", {"entity_id": ENTITY, "temperature": 22}, blocking=True
+    )
+    await hass.async_block_till_done()
+    assert hass.states.get(ENTITY).attributes["trv_setpoint"] % 1.0 == 0

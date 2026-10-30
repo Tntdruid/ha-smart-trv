@@ -4,7 +4,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from .test_climate import ENTITY, USER_INPUT, set_trv, trv_calls  # noqa: F401 - fixture
+from .test_climate import ENTITY, USER_INPUT, flow_input, set_trv, trv_calls  # noqa: F401 - fixture
 
 SCHEDULE = "schedule.christian_nat_varme"
 NUMBER = "number.stue_night_temperature"
@@ -82,7 +82,7 @@ async def test_options_can_clear_schedule(hass: HomeAssistant, hass_client, trv_
     fields = {f["name"]: f for f in flow["data_schema"]}
     assert fields["night_entity"]["description"]["suggested_value"] == SCHEDULE
 
-    options = {k: v for k, v in USER_INPUT.items() if k != "name"}  # night_entity left out = cleared
+    options = flow_input(USER_INPUT, drop_name=True)  # night_entity left out = cleared
     resp = await client.post(
         f"/api/config/config_entries/options/flow/{flow['flow_id']}", json=options
     )
