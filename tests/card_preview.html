@@ -88,10 +88,12 @@ function makeHass(states) {
 }
 
 window.cards = [];
+const COMPACT = { show_graph: false, show_stats: false, show_explanation: false, show_warnings: false, show_night: false };
+const params = new URLSearchParams(location.search);
 for (const theme of ["light", "dark"]) {
   SCENARIOS.forEach((states) => {
     const card = document.createElement("smart-trv-card");
-    card.setConfig({ entity: "climate.stue_varme_test" });
+    card.setConfig({ entity: "climate.stue_varme_test", ...(params.has("compact") ? COMPACT : {}) });
     card.hass = makeHass(structuredClone(states));
     document.getElementById(theme).appendChild(card);
     window.cards.push(card);

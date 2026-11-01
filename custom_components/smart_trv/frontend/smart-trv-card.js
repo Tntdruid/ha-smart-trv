@@ -4,13 +4,37 @@
  *   type: custom:smart-trv-card
  *   entity: climate.stue_varme_test
  *   name: Stue          # optional
- *   show_graph: true    # optional, 24 h room temperature vs target
+ *   show_graph: true        # optional, 24 h room temperature vs target
+ *   show_stats: true        # the four numbers (TRV setpoint, TRV reads, learned offset, error)
+ *   show_explanation: true  # what it is doing, in one sentence
+ *   show_warnings: true     # ⚠️ boxes (cold radiator, TRV problems, ...)
+ *   show_night: true        # night temperature row
+ * All off gives a compact card: name, status, room temperature and target.
  *
  * Finds the room's diagnostic sensors and night temperature through the device registry,
  * so only the climate entity has to be given.
  */
 
-const CARD_VERSION = "0.3.1";
+const CARD_VERSION = "0.4.0";
+
+const SHOW = ["show_graph", "show_stats", "show_explanation", "show_warnings", "show_night"];
+const DEFAULTS = Object.fromEntries(SHOW.map((k) => [k, true]));
+const SHOW_LABELS = {
+  da: {
+    show_graph: "Vis graf (24 timer)",
+    show_stats: "Vis tal (TRV-setpunkt, TRV måler, lært offset, afvigelse)",
+    show_explanation: "Vis forklaring",
+    show_warnings: "Vis advarsler",
+    show_night: "Vis nattemperatur",
+  },
+  en: {
+    show_graph: "Show graph (24 h)",
+    show_stats: "Show numbers (TRV setpoint, TRV reads, learned offset, error)",
+    show_explanation: "Show explanation",
+    show_warnings: "Show warnings",
+    show_night: "Show night temperature",
+  },
+};
 
 const TEXT = {
   da: {
@@ -94,12 +118,11 @@ class SmartTrvCard extends HTMLElement {
           selector: { entity: { filter: { integration: "smart_trv", domain: "climate" } } },
         },
         { name: "name", selector: { text: {} } },
-        { name: "show_graph", selector: { boolean: {} } },
+        ...SHOW.map((name) => ({ name, selector: { boolean: {} } })),
       ],
       computeLabel: (schema) => {
         const da = (document.documentElement.lang || "").toLowerCase().startsWith("da");
-        if (schema.name === "show_graph") return da ? "Vis graf (24 timer)" : "Show graph (24 h)";
-        return undefined; // HA's own label for entity/name
+        return SHOW_LABELS[da ? "da" : "en"][schema.name]; // undefined: HA's own label
       },
     };
   }
@@ -123,7 +146,7 @@ class SmartTrvCard extends HTMLElement {
     if (config && config.entity && !String(config.entity).startsWith("climate.")) {
       throw new Error("Choose a Smart TRV climate entity (entity: climate.xxx)");
     }
-    this._config = { show_graph: true, ...(config || {}) };
+    this._config = { ...DEFAULTS, ...(config || {}) };
     this._signature = undefined;
     this._history = undefined;
     this._historyAt = 0;
@@ -145,7 +168,8 @@ class SmartTrvCard extends HTMLElement {
   }
 
   getCardSize() {
-    return this._config && this._config.show_graph ? 7 : 5;
+    const c = this._config || DEFAULTS;
+    return 2 + (c.show_graph ? 2 : 0) + (c.show_stats ? 1 : 0) + (c.show_explanation ? 1 : 0) + (c.show_night ? 1 : 0);
   }
 
   getGridOptions() {
@@ -346,7 +370,7 @@ class SmartTrvCard extends HTMLElement {
         <div class="header">
           <div class="name">${esc(name)}</div>
           <button class="chip" data-more="${esc(rel.status || this._config.entity)}">
-            <span>${nightActive ? "🌙 " : ""}${STATUS_ICON[status] || ""}</span>
+            <span>${!this._config.show_warnings && warnings.length ? "⚠️ " : ""}${nightActive ? "🌙 " : ""}${STATUS_ICON[status] || ""}</span>
             <span>${esc(statusLabel)}</span>
           </button>
           <button class="icon power ${isOff ? "" : "on"}" data-action="power"
@@ -373,7 +397,7 @@ class SmartTrvCard extends HTMLElement {
         ${this._config.show_graph ? this._graph(a) : ""}
 
         ${
-          stats.length
+          this._config.show_stats && stats.length
             ? `<div class="stats">${stats
                 .map(
                   ([label, v, id, unit, signed]) => `
@@ -386,11 +410,11 @@ class SmartTrvCard extends HTMLElement {
             : ""
         }
 
-        ${mainText ? `<div class="explanation">${esc(mainText)}</div>` : ""}
-        ${warnings.map((w) => `<div class="warning">⚠️ ${esc(w)}</div>`).join("")}
+        ${this._config.show_explanation && mainText ? `<div class="explanation">${esc(mainText)}</div>` : ""}
+        ${this._config.show_warnings ? warnings.map((w) => `<div class="warning">⚠️ ${esc(w)}</div>`).join("") : ""}
 
         ${
-          rel.night
+          this._config.show_night && rel.night
             ? `<div class="night ${nightActive ? "active" : ""}">
             <div class="night-label">🌙 ${t.night}${
               nightActive ? ` <span class="badge">${t.nightActive}</span>` : ""
@@ -411,7 +435,7 @@ class SmartTrvCard extends HTMLElement {
     root.querySelector('[data-action="power"]').onclick = () => this._togglePower();
     root.querySelector('[data-action="target-down"]').onclick = () => this._changeTarget(-STEP);
     root.querySelector('[data-action="target-up"]').onclick = () => this._changeTarget(STEP);
-    if (rel.night) {
+    if (this._config.show_night && rel.night) {
       root.querySelector('[data-action="night-down"]').onclick = () => this._changeNight(-STEP, rel.night);
       root.querySelector('[data-action="night-up"]').onclick = () => this._changeNight(STEP, rel.night);
     }

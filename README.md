@@ -100,8 +100,14 @@ Rediger dashboard → **Tilføj kort** → søg **"Smart TRV"** → vælg rummet
 ```yaml
 type: custom:smart-trv-card
 entity: climate.stue_varme_test
-show_graph: true   # 24 timers graf af rum vs. mål (valgfri)
+show_graph: true        # 24 timers graf af rum vs. mål
+show_stats: true        # de fire tal
+show_explanation: true  # forklaringen
+show_warnings: true     # ⚠️-advarsler
+show_night: true        # nattemperatur
 ```
+
+Alle fem kan slås til og fra i kortets indstillinger. Slår du dem alle fra, får du et kompakt kort med navn, status, rumtemperatur og mål med −/+. Det passer fx godt til "Hele huset". Er der en skjult advarsel, viser status-mærket ⚠️.
 
 Kortet viser:
 - Rumtemperatur og mål med −/+ (venter, til du holder op med at klikke, før det sender)
