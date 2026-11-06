@@ -18,3 +18,14 @@ if sys.platform == "win32":
 @pytest.fixture(autouse=True)
 def auto_enable_custom_integrations(enable_custom_integrations):
     yield
+
+
+@pytest.fixture(autouse=True)
+def danish_by_default(request, monkeypatch):
+    """Most tests check the Danish texts (the author's setup). Tests marked real_language use
+    Home Assistant's own language setting instead."""
+    if "real_language" not in request.keywords:
+        from custom_components.smart_trv import climate
+
+        monkeypatch.setattr(climate.SmartTRVClimate, "_lang", property(lambda self: "da"))
+    yield

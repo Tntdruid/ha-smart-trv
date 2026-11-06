@@ -2,181 +2,185 @@
 
 # Smart TRV (PI) – Home Assistant
 
-Styrer radiatortermostater (Tuya **TV02** og **TRV602** via Zigbee2MQTT, og andre TRV'er, der er en `climate`-entitet) ud fra en **rumsensor** med en PI-regulator, så rummet faktisk rammer målet.
+🇬🇧 English · 🇩🇰 [Dansk](README.da.md)
 
-## Hvorfor en TRV ikke rammer målet
+Controls radiator thermostats (Tuya **TV02** and **TRV602** via Zigbee2MQTT, and any other TRV that is a `climate` entity) from a **room sensor** with a PI controller, so the room actually reaches its target.
 
-En TRV måler temperaturen lige ved den varme radiator, så den tror, rummet er varmere, end det er. Den almindelige løsning er at lægge forskellen mellem TRV-sensoren og rumsensoren oven i setpunktet. Det er en ren proportional korrektion, og en P-regulator ender altid med en fast restafvigelse. Ventilen skal stå lidt åben for at holde rummet varmt, og det kræver, at rummet er lidt *under* målet. Med TV02's 0,5 °C-trin lander det typisk på 21,5 °C, når målet er 22.
+## Why a TRV misses the target
 
-Smart TRV tilføjer et **integralled**: så længe rummet er under målet, skubber den langsomt TRV-setpunktet op, indtil afvigelsen er 0.
+A TRV measures the temperature right next to the hot radiator, so it thinks the room is warmer than it is. The usual fix is to add the difference between the TRV sensor and the room sensor to the setpoint. That is a purely proportional correction, and a P controller always settles with a remaining error: the valve has to stay a little open to keep the room warm, which needs the room to be a little *below* target. With the TV02's 0.5 °C steps it typically lands on 21.5 °C when the target is 22.
 
-Afvigelsen ved ren offset-korrektion vokser med varmebehovet. Den er størst om natten, når det er koldest udenfor og radiatoren skal give mest.
+Smart TRV adds an **integral term**: as long as the room is below target, it slowly pushes the TRV setpoint up until the error is 0.
 
-Simulering af en langsom stue med kolde nætter og et vindue åbnet 11:15–11:30 (`python tests/simulate_stue.py`), mål 22 °C:
+With offset-only correction the error grows with heat demand. It is largest at night, when it is coldest outside and the radiator has to give the most.
 
-| | Døgnet (uden udluftning) |
+Simulation of a slow living room with cold nights and a window opened 11:15–11:30 (`python tests/simulate_stue.py`), target 22 °C:
+
+| | Day (excluding airing) |
 |---|---|
-| Kun offset-korrektion (P) | 21,39–22,01 °C |
-| Smart TRV (PI) | 21,88–22,22 °C |
+| Offset correction only (P) | 21.39–22.01 °C |
+| Smart TRV (PI) | 21.88–22.22 °C |
 
-TRV'erne styres med et setpunkt, ikke ventilåbning i %. Står ventilen allerede helt åben, lærer integralet ikke mere, for et højere setpunkt ændrer ikke noget. Melder TRV'en selv, hvor åben ventilen er (TRV602's `position`), bruger Smart TRV det: 95 % eller mere er helt åben, 5 % eller mindre er lukket. Ellers regner den ventilen for helt åben, når setpunktet ligger mindst 2 °C over det, TRV'en selv måler. Med lune radiatorer (fjernvarme) måler TRV'en kun ca. 1 °C over rummet, også mens den varmer, så en grænse på 1 °C fik integralet til at stå stille og rummet til at blive under målet (`python tests/simulate_lukewarm.py`). Det forhindrer, at en kold radiator om natten "pumper" det lærte offset op, så rummet bliver for varmt, når solen kommer. Er ventilen helt åben i over 2 timer, uden at TRV'en bliver varmere end rummet, skriver forklaringen, at radiatoren ikke bliver varm.
+TRVs are controlled with a setpoint, not a valve opening in %. If the valve is already fully open, the integral stops learning, because a higher setpoint changes nothing. If the TRV reports its own valve opening (the TRV602's `position`), Smart TRV uses it: 95 % or more is fully open, 5 % or less is closed. Otherwise it treats the valve as fully open when the setpoint is at least 2 °C above what the TRV itself measures. With lukewarm radiators (district heating) the TRV reads only about 1 °C above the room even while heating, so a 1 °C limit froze the integral and kept the room under target (`python tests/simulate_lukewarm.py`). This stops a cold radiator at night from "pumping up" the learned offset, which would overheat the room when the sun comes out. If the valve has been fully open for more than 2 hours without the TRV getting warmer, the explanation says the radiator isn't getting hot.
 
-Integralet lærer højst med 0,3 °C afvigelse ad gangen. Store afvigelser, fx efter udluftning, klares af P-leddet, så integralet ikke "pumper sig op" og giver overshoot om eftermiddagen.
+The integral learns from at most 0.3 °C of error at a time. Large errors, e.g. after airing, are handled by the P term, so the integral doesn't wind up and overshoot in the afternoon.
 
-## Understøttede TRV'er
+## Supported TRVs
 
-Alle TRV'er, der i Home Assistant er en `climate`-entitet med setpunkt og egen temperaturmåling. Testet mod:
+Any TRV that is a `climate` entity in Home Assistant with a setpoint and its own temperature reading. Tested with:
 
-| | Sluk ved åbent vindue | "Varmer"-status | Bemærk |
+| | Off when a window opens | "Heating" status | Note |
 |---|---|---|---|
-| Tuya **TV02** | `hvac_mode: off` | gættes ud fra setpunkt og TRV'ens måling | kun 0,5 °C-trin |
-| Tuya **TRV602** | preset `off` (den har ingen hvac off) | fra TRV'ens `running_state` | i Z2M: sæt **`max_temperature` til 35 °C** (ellers afviser den Smart TRV's setpunkter over max, og varmer aldrig), og `mode` til **comfort** (`eco` åbner/lukker kun helt) |
+| Tuya **TV02** | `hvac_mode: off` | guessed from setpoint and the TRV's reading | 0.5 °C steps only |
+| Tuya **TRV602** | preset `off` (it has no hvac off) | from the TRV's `running_state` | in Z2M: set **`max_temperature` to 35 °C** (otherwise it refuses Smart TRV's setpoints above its max and never heats), and `mode` to **comfort** (`eco` only opens/closes fully) |
 
-Har en TRV hverken hvac off eller preset off, sætter Smart TRV den til laveste setpunkt, mens vinduet er åbent.
+If a TRV has neither hvac off nor preset off, Smart TRV sets it to its lowest setpoint while the window is open.
 
-Tager en TRV ikke imod det setpunkt, Smart TRV sender (den viser stadig noget andet efter 10 minutter), skriver forklaringen en ⚠️-advarsel om det.
+If a TRV doesn't accept the setpoint Smart TRV sends (it still shows a lower value after 10 minutes), the explanation shows a ⚠️ warning.
 
 ## Installation
 
-**Med HACS (anbefalet):**
+**With HACS or the Marketplace (recommended):** In Home Assistant 2026.11+ HACS is built in under **Settings → Marketplace**.
 
-1. HACS → ⋮ → **Brugerdefinerede repositories** → tilføj `https://github.com/Tntdruid/ha-smart-trv`, kategori **Integration**.
-2. Søg efter **Smart TRV (PI)** i HACS → **Download**.
-3. Genstart Home Assistant.
-4. **Indstillinger → Enheder og tjenester → Tilføj integration → "Smart TRV (PI)"**.
+1. HACS/Marketplace → ⋮ → **Custom repositories** → add `https://github.com/Tntdruid/ha-smart-trv`, category **Integration**. (Once Smart TRV is in the official catalog you can skip this and just search.)
+2. Search for **Smart TRV (PI)** → **Download**.
+3. Restart Home Assistant.
+4. **Settings → Devices & services → Add integration → "Smart TRV (PI)"**.
 
-HACS giver besked, når der kommer en ny version.
+HACS tells you when a new version is out.
 
-**Manuelt:** Kopiér mappen `custom_components/smart_trv` til `/config/custom_components/smart_trv` og genstart Home Assistant.
+**Manually:** Copy `custom_components/smart_trv` to `/config/custom_components/smart_trv` and restart Home Assistant.
 
-Ved opsætningen vælger du rumsensor, en eller flere TRV'er og eventuelt vinduessensorer.
+During setup you pick the room sensor, one or more TRVs and optionally window sensors.
 
-Før du starter:
+Before you start:
 
-- **Slå anden styring af rummets TRV'er fra**, fx andre termostat-integrationer eller automationer, der sætter TRV'ens temperatur. Ellers kæmper de om den.
-- **Sæt `local_temperature_calibration` til 0** på TRV'erne i Zigbee2MQTT. Et gammelt offset fra en tidligere styring skader ikke, men så starter regulatoren fra et kendt udgangspunkt.
-- Integrationen sætter selv TRV'erne i preset `manual`, så deres interne ugeplan ikke overskriver setpunktet.
+- **Turn off any other control of the room's TRVs**, e.g. other thermostat integrations or automations that set the TRV temperature. Otherwise they fight over it.
+- **Set `local_temperature_calibration` to 0** on the TRVs in Zigbee2MQTT. An old offset from earlier control does no harm, but the controller then starts from a known point.
+- The integration puts the TRVs in preset `manual` itself, so their internal weekly schedule doesn't override the setpoint.
 
-Brug den nye `climate.<navn>`-entitet i dit dashboard og dine automationer i stedet for TRV'en direkte.
+Use the new `climate.<name>` entity in your dashboards and automations instead of the TRV itself.
 
-## Indstillinger
+## Settings
 
-Du vælger kun det, der beskriver huset: rumsensor, TRV'er, vinduer/døre med timere, natplan, udesensor og forvarmning til/fra. Så sætter du målet, fx 22 °C, og Smart TRV klarer resten:
+You only choose what describes the house: room sensor, TRVs, windows/doors with delays, night schedule, outdoor sensor and preheat on/off. Then you set the target, e.g. 22 °C, and Smart TRV does the rest:
 
-| Hvad | Hvordan |
+| What | How |
 |---|---|
-| Kp og Ki | Tuner sig selv en gang i døgnet (se `kp`, `ki` og `last_tuning` på klimaentiteten) |
-| TRV-trin | Aflæses fra TRV'en (`target_temp_step`), ellers 0,5 °C |
-| Max boost / sænkning | Fast 6 °C over og 3 °C under målet |
-| Interval | Fast 5 min. Nye målinger vises med det samme, men TRV'en får kun nyt setpunkt ved reguleringen, og kun når det har flyttet sig mindst ét TRV-trin. Det holder motoren i ro: ca. 20 ændringer i døgnet i stedet for flere hundrede (`python tests/simulate_chatter.py`) |
+| Kp and Ki | Tune themselves once a day (see `kp`, `ki` and `last_tuning` on the climate entity) |
+| TRV step | Read from the TRV (`target_temp_step`), otherwise 0.5 °C |
+| Max boost / cut | Fixed 6 °C above and 3 °C below the target |
+| Interval | Fixed 5 min. New readings show immediately, but the TRV only gets a new setpoint at a control run, and only when it has moved at least one TRV step. That keeps the motor quiet: about 20 changes a day instead of hundreds (`python tests/simulate_chatter.py`) |
 
-Under den sammenklappede **Avanceret**-sektion kan man slå tuningen fra og ændre startværdierne for Kp/Ki og styrken af udetemperatur-kompenseringen. Det behøver man ikke.
+The collapsed **Advanced** section lets you turn tuning off and change the starting values for Kp/Ki and the strength of the outdoor compensation. You don't need to.
 
-## Vinduer og døre
+## Windows and doors
 
-Vælg vindues- og dørsensorer under **Konfigurer**. Så slukker Smart TRV TRV'erne, mens der er åbent, og læringen står på pause imens. To timere pr. rum:
+Choose window and door sensors under **Configure**. Smart TRV then turns the TRVs off while something is open, and learning pauses meanwhile. Two delays per room:
 
-| Felt | Standard | Betydning |
+| Field | Default | Meaning |
 |---|---|---|
-| Sluk efter åben | 60 sek. | Hvor længe der skal være åbent, før TRV'erne slukkes. En dør, man går igennem, slukker ikke varmen |
-| Tænd igen efter lukket | 0 sek. | Hvor længe der skal være lukket, før varmen starter igen |
+| Turn off after open | 60 s | How long it must be open before the TRVs turn off. Walking through a door doesn't turn the heating off |
+| Back on after closed | 0 s | How long it must be closed before heating resumes |
 
-Mens timeren kører, står der fx "🪟 Vindue/dør åben: slukker om 45 sek." i forklaringen. Står vinduet allerede åbent, når Home Assistant starter, slukkes der med det samme.
+While a delay runs, the explanation shows e.g. "🪟 Window/door open: turning off in 45 s". A window already open when Home Assistant starts turns the TRVs off at once.
 
-## Nattemperatur pr. rum
+## Night temperature per room
 
-1. Lav en tidsplan i Home Assistant (Indstillinger → Enheder og tjenester → Hjælpere → Tidsplan), fx `schedule.christian_nat_varme`, der er **tændt om natten**. Flere rum kan godt dele samme plan.
-2. På rummet: **Konfigurer → Natplan** → vælg tidsplanen. En `input_boolean` eller `binary_sensor` virker også.
-3. Indstil **Nattemperatur** (`number.<rum>_night_temperature`) på enhedssiden eller dashboardet. Hvert rum har sin egen.
+1. Create a schedule in Home Assistant (Settings → Devices & services → Helpers → Schedule), e.g. `schedule.night_heating`, that is **on at night**. Several rooms can share one schedule.
+2. On the room: **Configure → Night schedule** → choose the schedule. An `input_boolean` or `binary_sensor` works too.
+3. Set the **Night temperature** (`number.<room>_night_temperature`) on the device page or the dashboard. Each room has its own.
 
-Når planen er tændt, styrer rummet efter nattemperaturen, og forklaringen starter med 🌙. Termostatkortet viser altid det aktuelle mål. Drejer du på det om natten, ændrer du nattemperaturen, og om dagen ændrer du dagtemperaturen. Skiftet mellem dag og nat lærer ikke integralet noget forkert, fordi ventilen står helt lukket eller helt åben, mens rummet skifter temperatur.
+While the schedule is on, the room follows its night temperature and the explanation starts with 🌙. The thermostat card always shows the current target: turning it at night changes the night temperature, during the day the day temperature. Switching between day and night doesn't teach the integral anything wrong, because the valve is fully closed or fully open while the room changes temperature.
 
-## Smart TRV-kortet
+## The Smart TRV card
 
-Integrationen har sit eget dashboardkort, som den selv indlæser. Du skal ikke tilføje nogen ressource.
+The integration has its own dashboard card and loads it itself. You don't need to add a resource.
 
-Rediger dashboard → **Tilføj kort** → søg **"Smart TRV"** → vælg rummet. Eller i YAML:
+Edit dashboard → **Add card** → search **"Smart TRV"** → choose the room. Or in YAML:
 
 ```yaml
 type: custom:smart-trv-card
-entity: climate.stue_varme_test
-show_graph: true        # 24 timers graf af rum vs. mål
-show_stats: true        # de fire tal
-show_explanation: true  # forklaringen
-show_warnings: true     # ⚠️-advarsler
-show_night: true        # nattemperatur
+entity: climate.living_room_heating
+show_graph: true        # 24 h graph of room vs. target
+show_stats: true        # the four numbers
+show_explanation: true  # the explanation
+show_warnings: true     # ⚠️ warnings
+show_night: true        # night temperature
 ```
 
-Alle fem kan slås til og fra i kortets indstillinger. Slår du dem alle fra, får du et kompakt kort med navn, status, rumtemperatur og mål med −/+. Det passer fx godt til "Hele huset". Er der en skjult advarsel, viser status-mærket ⚠️.
+All five can be switched on and off in the card settings. With all off you get a compact card with name, status, room temperature and target with −/+, which suits a "whole house" view. A hidden warning shows as ⚠️ on the status chip.
 
-Kortet viser:
-- Rumtemperatur og mål med −/+ (venter, til du holder op med at klikke, før det sender)
-- Status (Varmer, Ventil lukket, Vindue åbent, 🌙 nat) og tænd/sluk
-- TRV-setpunkt, hvad TRV'en måler, lært offset og afvigelse
-- Forklaringen i en sætning, med ⚠️-advarsler fremhævet
-- Nattemperatur med −/+
+The card shows:
+- Room temperature and target with −/+ (it waits until you stop clicking before sending)
+- Status (Heating, Valve closed, Window open, 🌙 night) and on/off
+- TRV setpoint, what the TRV reads, learned offset and error
+- The explanation in one sentence, with ⚠️ warnings highlighted
+- Night temperature with −/+
 
-Klik på en værdi for at se dens historik. Kortet finder selv rummets sensorer, så du skal kun vælge climate-entiteten.
+Click a value to see its history. The card finds the room's sensors itself, so you only choose the climate entity.
 
-**Viser kortet "Konfigurationsfejl", eller snurrer det i kortvælgeren?** Så er den automatiske indlæsning ikke slået igennem. Tilføj kortet som ressource (Indstillinger → Betjeningspaneler → ⋮ → Ressourcer → Tilføj, type *JavaScript-modul*):
+**Does the card show "Configuration error", or spin in the card picker?** Then auto-loading didn't take effect. Add the card as a resource (Settings → Dashboards → ⋮ → Resources → Add, type *JavaScript module*): `/smart_trv/smart-trv-card.js`. The integration serves the file itself, so it always follows updates.
 
-- `/smart_trv/smart-trv-card.js`: integrationen leverer selv filen, så den altid følger med, når du opdaterer.
-- eller kopiér `custom_components/smart_trv/frontend/smart-trv-card.js` til `/config/www/` og brug `/local/smart-trv-card.js`. Husk så at kopiere den igen ved hver opdatering, og sæt fx `?v=0.3.2` bag adressen, så browseren henter den nye version.
+Preview without Home Assistant: run `python -m http.server` in the repository and open `http://localhost:8000/tests/card_preview.html`.
 
-Preview uden Home Assistant: `python -m http.server` i repoet, og åbn `http://localhost:8000/tests/card_preview.html`.
+## Preheat
 
-## Forvarmning
+If the room uses a **schedule** as its night schedule, Smart TRV starts heating early enough that the room *is* at day temperature when the night ends (the schedule's `next_event`). It learns the room's warm-up rate (°C/h) at full heat; until it has measured, it assumes 1 °C/h. It preheats at most 6 hours ahead. Meanwhile the explanation shows "☀️ Preheating: the room should be 22.0 °C at 06:00". Can be turned off under Configure → *Preheat before the night ends*.
 
-Bruger rummet en **tidsplan** som natplan, starter Smart TRV varmen så tidligt, at rummet *er* på dagtemperatur, når natten slutter (tidsplanens `next_event`). Den lærer selv rummets opvarmningshastighed (°C/time) ved fuld varme. Indtil den har målt, regner den med 1 °C/time. Den forvarmer højst 6 timer før. Mens den gør det, står der "☀️ Forvarmer: rummet skal være 22,0 °C kl. 06:00" i forklaringen. Kan slås fra under Konfigurer → *Forvarm før natten slutter*.
+Simulation (`python tests/simulate_learning.py`), night 19 °C until 06:00, day 22 °C: the room is 22.0 °C at 06:00 with preheat, against 19.0 °C without.
 
-Simulering (`python tests/simulate_learning.py`), nat 19 °C til 06:00, dag 22 °C: rummet er 21,8 °C kl. 06:00 med forvarmning, mod 19,0 °C uden.
+## Outdoor temperature
 
-## Udetemperatur
+Choose an outdoor sensor under Configure. Smart TRV then adds `0.1 × (target − outdoor)` to the TRV setpoint and reacts to cold nights *before* the room cools down; the learned offset handles the rest. In the simulation the swing on a normal day halves (21.75–22.24 → 21.89–22.13 °C). Adding the outdoor sensor to a room that has already learned subtracts the compensation from what it learned, so the setpoint doesn't jump.
 
-Vælg en udesensor under Konfigurer (fx `sensor.ude_ude_temperatur`). Så lægger Smart TRV `0,1 × (mål − ude)` oven i TRV-setpunktet og reagerer på kolde nætter, *før* rummet bliver koldt. Det lærte offset tager sig af resten. I simuleringen halveres svinget på en normal dag (21,75–22,24 → 21,89–22,13 °C). Tilføjes udesensoren til et rum, der allerede har lært, trækkes kompenseringen fra det lærte, så setpunktet ikke springer.
+## TRV monitoring
 
-## Overvågning af TRV'er
+`binary_sensor.<room>_problem` turns on when a TRV is **offline**, hasn't reported for **6 hours**, or has **less than 20 % battery**. The battery sensor is found through the TRV's device. The problem also shows as ⚠️ in the explanation, and the **Whole house** view of the dashboard template lists all rooms and their problems. Use the sensor in an automation for a notification.
 
-`binary_sensor.<rum>_problem` tænder, når en TRV er **offline**, ikke har meldt sig i **6 timer**, eller har **under 20 % batteri**. Batterisensoren findes selv via TRV'ens enhed. Problemet står også som ⚠️ i forklaringen, og fanen **Hele huset** i dashboard-skabelonen samler alle rum og deres problemer. Brug sensoren i en automation, hvis du vil have en notifikation.
+## Valve that doesn't close
 
-## Ventil der ikke lukker
+If Smart TRV has told the TRV to close for more than 2 hours, but the TRV still reads at least 1 °C above the room and hasn't cooled at least 0.5 °C, the radiator is still hot. The explanation then warns that the valve doesn't fully close (e.g. adapter height or set screw, or the TRV's valve calibration). A sunny day doesn't trigger it, because then the TRV isn't noticeably warmer than the room.
 
-Har Smart TRV bedt TRV'en lukke i over 2 timer, men måler TRV'en stadig mindst 1 °C over rummet uden at være kølet mindst 0,5 °C af, er radiatoren stadig varm. Så advarer forklaringen om, at ventilen ikke lukker helt (fx adapterens højde eller låseskrue, eller TRV'ens ventil-kalibrering). En solrig dag giver ikke advarslen, for så er TRV'en ikke mærkbart varmere end rummet.
+## Showers and cooking
 
-## Bad og madlavning
+If the room temperature rises 0.6 °C or more within 15 minutes, or humidity 8 percentage points or more, it's a shower, cooking or similar, not the radiator. Smart TRV then pauses learning for 60 minutes so a shower doesn't drag the learned offset down; control carries on as normal. The humidity sensor is found automatically on the same device as the room sensor (e.g. an SHT4x). The explanation shows "🚿 … learning paused until 08:15".
 
-Stiger rumtemperaturen 0,6 °C eller mere på 15 minutter, eller fugten 8 procentpoint eller mere, er det et bad, madlavning eller lignende og ikke radiatoren. Så holder Smart TRV læringen på pause i 60 minutter, så et bad ikke trækker det lærte offset ned. Reguleringen kører videre som normalt imens. Fugtsensoren findes automatisk på samme enhed som rumsensoren (fx en SHT4x). Forklaringen viser "🚿 … læringen holder pause til kl. 08:15".
+## Auto-tuning
 
-## Automatisk tuning
+Once a day Smart TRV looks at how the room behaved while regulating calmly. Morning warm-up, airing and a fully open valve don't count.
+- If the room oscillated: Kp −15 % and Ki −10 %.
+- If it typically sat more than 0.12 °C from target without oscillating: Kp +15 % and Ki +20 %.
+- Otherwise: no change.
 
-En gang i døgnet ser Smart TRV på, hvordan rummet har opført sig, når det regulerer roligt. Opstarten om morgenen, udluftning og helt åben ventil tæller ikke med.
-- Svingede rummet frem og tilbage: Kp −15 % og Ki −10 %.
-- Lå det typisk mere end 0,12 °C fra målet uden at svinge: Kp +15 % og Ki +20 %.
-- Ellers: ingen ændring.
+Limits: Kp 1–6 and Ki 0.3–3. The climate entity shows the current `kp`, `ki` and `last_tuning`. If you change Kp/Ki yourself under Configure, tuning starts over from your values. Can be turned off under *Auto-tune Kp/Ki*.
 
-Grænser: Kp 1–6 og Ki 0,3–3. Klimaentiteten viser de aktuelle `kp`, `ki` og `last_tuning`. Ændrer du selv Kp/Ki under Konfigurer, starter tuningen forfra fra dine værdier. Kan slås fra under *Automatisk tuning af Kp/Ki*.
+## See what it is doing
 
-## Se hvad den laver
+The integration creates sensors you can graph (example for a room named "Living room"):
 
-Integrationen laver sensorer, der kan vises som grafer (eksempel for "Stue"):
-
-| Sensor | Viser |
+| Sensor | Shows |
 |---|---|
-| `sensor.stue_status` | Varmer / Ventil lukket / Vindue åbent / Slukket / Ingen rummåling. Attributten `explanation` forklarer i en sætning, hvad den gør og hvorfor |
-| `sensor.stue_trv_setpoint` | Hvad TV02 har fået besked på |
-| `sensor.stue_trv_temperature` | Hvad TV02 selv måler |
-| `sensor.stue_error` | Mål minus rumtemperatur |
-| `sensor.stue_p_term` | Den direkte reaktion på afvigelsen |
-| `sensor.stue_integral` | Det lærte offset. Når den flader ud, har den lært rummet |
+| `sensor.living_room_status` | Heating / Valve closed / Window open / Off / No room reading. The `explanation` attribute says in one sentence what it is doing and why |
+| `sensor.living_room_trv_setpoint` | What the TRV has been told |
+| `sensor.living_room_trv_temperature` | What the TRV itself measures (each TRV as an attribute) |
+| `sensor.living_room_error` | Target minus room temperature |
+| `sensor.living_room_p_term` | The direct reaction to the error |
+| `sensor.living_room_integral` | The learned offset. When it levels out, it has learned the room |
+| `binary_sensor.living_room_problem` | TRV offline, silent or low battery |
 
-**Færdigt dashboard, der finder dine entiteter selv:**
+**A ready dashboard that finds your entities itself:**
 
-1. Åbn **Udviklerværktøjer → Skabelon**, slet indholdet i venstre side, og indsæt hele [dashboard/generate_dashboard.jinja](dashboard/generate_dashboard.jinja).
-2. Kopiér resultatet i højre side.
-3. Lav et nyt dashboard → ✏️ Rediger → ⋮ → *Rå konfigurationseditor*, og indsæt det.
+1. Open **Developer tools → Template**, clear the left side, and paste all of [dashboard/generate_dashboard.jinja](dashboard/generate_dashboard.jinja).
+2. Copy the result on the right.
+3. Create a new dashboard → ✏️ Edit → ⋮ → *Raw configuration editor*, and paste it.
 
-Du får én fane pr. Smart TRV-rum, uanset hvad du har kaldt dem. Hver fane viser forklaringen lige nu, grafer for rum/mål, TRV og regulatoren, plus en logbog over, hvad den har gjort. Tilføjer du flere rum senere, så kør skabelonen igen.
+You get a "Whole house" view plus one view per Smart TRV room, whatever you called them. Each room view shows the explanation, graphs of room/target, TRV and controller, and a logbook of what it did. Run the template again after adding rooms. It follows Home Assistant's language (Danish or English); set `lang` at the top to force one.
 
-Tjenesten `smart_trv.reset_integral` nulstiller det lærte offset, fx hvis du flytter rumsensoren.
+The service `smart_trv.reset_integral` resets the learned offset, e.g. after moving the room sensor. The learned offset, Kp/Ki and warm-up rate survive restarts.
 
-**Tuning:** svinger rummet op og ned, så sænk Ki (fx 0,5). Tager det for lang tid at nå målet, så hæv Ki eller Kp lidt. Det lærte integral gemmes ved genstart.
+**Languages:** settings, entity names, status, the card, the explanation and the dashboard template follow Home Assistant's language (Danish or English).
+
+## Development
+
+Tests run against Home Assistant with `pytest-homeassistant-custom-component` (`pytest`), and the simulations in `tests/simulate_*.py` model rooms, radiators and TRVs. GitHub Actions run HACS validation, hassfest and the tests on every push.

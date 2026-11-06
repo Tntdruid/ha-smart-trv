@@ -91,7 +91,7 @@ from .const import (
 )
 from .controller import PIController
 from .learning import AutoTuner, HeatRateLearner, preheat_hours
-from .diagnostics_text import explain
+from .diagnostics_text import explain, language, problem_text
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -570,9 +570,7 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
                 else 0.0
             ),
         }
-        diag["explanation"] = explain(
-            diag, self._room_temp, self._goal()
-        )
+        diag["explanation"] = explain(diag, self._room_temp, self._goal(), self._lang)
         return diag
 
     # ------------------------------------------------------------------- helpers
@@ -721,6 +719,11 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
             return None
         return round(sum(positions) / len(positions))
 
+    @property
+    def _lang(self) -> str:
+        """Danish or English, following Home Assistant's language."""
+        return language(self.hass.config.language)
+
     def _check_trvs(self) -> dict[str, str]:
         """Problems per TRV: offline, silent for hours, or low battery."""
         problems: dict[str, str] = {}
@@ -728,15 +731,15 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
         for trv in self._trvs:
             state = self.hass.states.get(trv)
             if state is None or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
-                problems[trv] = "offline"
+                problems[trv] = problem_text("offline", None, self._lang)
                 continue
             silent = (now - state.last_reported).total_seconds() / 3600
             if silent >= TRV_STALE_HOURS:
-                problems[trv] = f"ingen kontakt i {silent:.0f} t"
+                problems[trv] = problem_text("silent", silent, self._lang)
                 continue
             battery = self._read_float(self._battery_entities.get(trv, ""))
             if battery is not None and battery < BATTERY_LOW:
-                problems[trv] = f"lavt batteri ({battery:.0f} %)"
+                problems[trv] = problem_text("battery", battery, self._lang)
         return problems
 
     @property

@@ -44,7 +44,7 @@ async def test_generates_view_per_room(hass: HomeAssistant, trv_calls) -> None: 
 
     dashboard = yaml.safe_load(render(hass))
     views = dashboard["views"]
-    assert [v["title"] for v in views][0] == "Hele huset"
+    assert [v["title"] for v in views][0] == "Whole house"  # test HA runs in English
     assert sorted(v["title"] for v in views[1:]) == ["Smart TRV", "Stue"]
 
     ids = list(entity_ids(dashboard))
@@ -72,3 +72,14 @@ async def test_users_room_name(hass: HomeAssistant, trv_calls) -> None:  # noqa:
     assert "climate.stue_varme_test" in ids
     assert "sensor.stue_varme_test_status" in ids
     assert not [e for e in ids if hass.states.get(e) is None]
+
+
+async def test_danish_home_assistant_gets_danish_dashboard(hass: HomeAssistant, trv_calls) -> None:  # noqa: F811
+    hass.config.language = "da"
+    await setup_entry(hass)
+    dashboard = yaml.safe_load(render(hass))
+    assert dashboard["title"] == "Varme"
+    assert dashboard["views"][0]["title"] == "Hele huset"
+    stue = dashboard["views"][1]
+    headings = [c.get("heading") for s in stue["sections"] for c in s["cards"] if c["type"] == "heading"]
+    assert headings == ["Lige nu", "Rummet"]
