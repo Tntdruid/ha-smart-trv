@@ -126,6 +126,10 @@ async def async_setup_entry(
     platform.async_register_entity_service("reset_integral", None, "async_reset_integral")
 
 
+# Home Assistant 2026.11+ names climate temperatures native_*; earlier versions don't.
+_NATIVE_CLIMATE = hasattr(ClimateEntity, "native_current_temperature")
+
+
 class SmartTRVClimate(ClimateEntity, RestoreEntity):
     _attr_has_entity_name = True
     _attr_name = None
@@ -135,7 +139,6 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
         | ClimateEntityFeature.TURN_ON
         | ClimateEntityFeature.TURN_OFF
     )
-    _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_target_temperature_step = 0.1
     _attr_min_temp = TRV_MIN_TEMP
     _attr_max_temp = TRV_MAX_TEMP
@@ -173,7 +176,7 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
         )
         self._attr_hvac_mode = HVACMode.HEAT
         self._day_target = 21.0
-        self._attr_current_temperature: float | None = None
+        self._room_temp: float | None = None
         self._seeded = False
         self._last_run: datetime | None = None
         self._trv_setpoint: float | None = None
@@ -253,7 +256,7 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
         self._find_battery_entities()
         self._find_humidity_sensor()
         self._detect_trv_step()
-        self._attr_current_temperature = self._read_float(self._room_sensor)
+        self._room_temp = self._read_float(self._room_sensor)
         self._window_off = self._any_window_open()  # already open at startup: no delay
         self.async_on_remove(self._cancel_window_timer)
 
@@ -293,8 +296,8 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
         if event.data["entity_id"] == self._room_sensor:
             # Only show the new reading; the controller runs on the timer. Running it on every
             # sensor update made the TRV motor move every few minutes.
-            self._attr_current_temperature = self._read_float(self._room_sensor)
-            self._check_spike(dt_util.utcnow(), self._attr_current_temperature)
+            self._room_temp = self._read_float(self._room_sensor)
+            self._check_spike(dt_util.utcnow(), self._room_temp)
             self._publish()
             return
         if event.data["entity_id"] == self._humidity_sensor:
@@ -357,7 +360,7 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
 
     async def _async_control(self) -> None:
         now = dt_util.utcnow()
-        room = self._attr_current_temperature
+        room = self._room_temp
 
         if self._attr_hvac_mode == HVACMode.OFF or self._window_open:
             self._last_run = now  # freeze the integral while not heating
@@ -372,7 +375,7 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
         self._check_spike(now, room)
         if self._humidity_sensor:
             self._check_humidity(now, self._read_float(self._humidity_sensor))
-        target = self.target_temperature
+        target = self._goal()
         if room is None:
             self._publish()  # TRVs keep their last setpoint
             return
@@ -504,7 +507,7 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
             status = STATUS_OFF
         elif self._window_open:
             status = STATUS_WINDOW
-        elif self._attr_current_temperature is None:
+        elif self._room_temp is None:
             status = STATUS_NO_SENSOR
         elif self.hvac_action == HVACAction.HEATING:
             status = STATUS_HEATING
@@ -568,7 +571,7 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
             ),
         }
         diag["explanation"] = explain(
-            diag, self._attr_current_temperature, self.target_temperature
+            diag, self._room_temp, self._goal()
         )
         return diag
 
@@ -603,7 +606,7 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
             return
         if self._preheat_for == nxt:
             return  # latched: keep going even though the room is getting warmer
-        room = self._attr_current_temperature
+        room = self._room_temp
         if room is None:
             return
         hours = preheat_hours(self._heat_rate.rate, room, self._day_target)
@@ -778,12 +781,35 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
 
     # ------------------------------------------------------------ entity API
 
-    @property
-    def target_temperature(self) -> float:
+    def _goal(self) -> float:
         """The goal right now: the night temperature while the night entity is on."""
         if self._night_active:
             return self._entry.runtime_data.night_temperature
         return self._day_target
+
+    # HA 2026.11 renamed the temperature members to native_* and will drop the old names in
+    # 2027.11; 2026.10 only knows the old ones. Serve whichever this Home Assistant uses.
+    if _NATIVE_CLIMATE:
+        _attr_native_temperature_unit = UnitOfTemperature.CELSIUS
+
+        @property
+        def native_current_temperature(self) -> float | None:
+            return self._room_temp
+
+        @property
+        def native_target_temperature(self) -> float:
+            return self._goal()
+
+    else:
+        _attr_temperature_unit = UnitOfTemperature.CELSIUS
+
+        @property
+        def current_temperature(self) -> float | None:
+            return self._room_temp
+
+        @property
+        def target_temperature(self) -> float:
+            return self._goal()
 
     @property
     def hvac_action(self) -> HVACAction:
