@@ -12,6 +12,11 @@ CALIBRATION_WARN_DELTA = 4.0
 # Fully open this long while the TRV's own reading rose less than this: the radiator stays cold.
 COLD_RADIATOR_HOURS = 2.0
 COLD_RADIATOR_RISE = 0.5
+# Told to close this long, yet the TRV still reads this much above the room and has barely
+# cooled: the radiator stays hot, the valve doesn't shut (Soveværelse: 23.9 °C at a 21.5 setpoint).
+HOT_RADIATOR_HOURS = 2.0
+HOT_RADIATOR_ABOVE_ROOM = 1.0
+HOT_RADIATOR_DROP = 0.5
 
 
 def _c(value: float | None) -> str:
@@ -75,6 +80,11 @@ def _explain_control(diag: dict[str, Any], room: float | None, target: float | N
         )
     elif diag.get("night_active"):
         mode = "🌙 Nattemperatur. "
+    if diag.get("learning_paused_until"):
+        mode += (
+            "🚿 Pludselig varme eller fugt (fx bad eller madlavning): læringen holder pause til "
+            f"kl. {diag['learning_paused_until']}. "
+        )
     outdoor = diag.get("outdoor_ff") or 0.0
     parts = f"Lært offset {_c(diag['integral'])} + reaktion nu {_c(diag['p_term'])}"
     if outdoor >= 0.05:
@@ -97,6 +107,23 @@ def _explain_control(diag: dict[str, Any], room: float | None, target: float | N
             "TRV'en af i 30 min (så er ventilen helt åben). Bliver radiatoren varm, sidder fejlen "
             "i TRV'en/adapteren (ventilstiften trykkes ikke fri). Forbliver den kold, er det "
             "varmeforsyningen: fyr/fjernvarme, en lukket returventil eller fastsiddende ventilstift."
+        )
+    closed = diag.get("closed_hours", 0.0)
+    drop = diag.get("closed_trv_drop")
+    if (
+        closed >= HOT_RADIATOR_HOURS
+        and drop is not None
+        and drop < HOT_RADIATOR_DROP
+        and trv is not None
+        and room is not None
+        and trv - room >= HOT_RADIATOR_ABOVE_ROOM
+    ):
+        text += (
+            f" ⚠️ Ventilen burde have været lukket i {closed:.1f} t".replace(".", ",")
+            + f", men TRV'en måler stadig {_c(trv)} ({_c(trv - room)} over rummet): radiatoren "
+            "er stadig varm, så ventilen lukker ikke helt. Tjek at TRV'en/adapteren trykker "
+            "ventilstiften helt i bund (adapterens højde og låseskrue), og kør TRV'ens "
+            "ventil-kalibrering igen, hvis den har en."
         )
     for trv_id, (sent, reported) in (diag.get("rejected") or {}).items():
         text += (

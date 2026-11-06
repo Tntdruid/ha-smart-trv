@@ -139,6 +139,14 @@ Vælg en udesensor under Konfigurer (fx `sensor.ude_ude_temperatur`). Så lægge
 
 `binary_sensor.<rum>_problem` tænder, når en TRV er **offline**, ikke har meldt sig i **6 timer**, eller har **under 20 % batteri**. Batterisensoren findes selv via TRV'ens enhed. Problemet står også som ⚠️ i forklaringen, og fanen **Hele huset** i dashboard-skabelonen samler alle rum og deres problemer. Brug sensoren i en automation, hvis du vil have en notifikation.
 
+## Ventil der ikke lukker
+
+Har Smart TRV bedt TRV'en lukke i over 2 timer, men måler TRV'en stadig mindst 1 °C over rummet uden at være kølet mindst 0,5 °C af, er radiatoren stadig varm. Så advarer forklaringen om, at ventilen ikke lukker helt (fx adapterens højde eller låseskrue, eller TRV'ens ventil-kalibrering). En solrig dag giver ikke advarslen, for så er TRV'en ikke mærkbart varmere end rummet.
+
+## Bad og madlavning
+
+Stiger rumtemperaturen 0,6 °C eller mere på 15 minutter, eller fugten 8 procentpoint eller mere, er det et bad, madlavning eller lignende og ikke radiatoren. Så holder Smart TRV læringen på pause i 60 minutter, så et bad ikke trækker det lærte offset ned. Reguleringen kører videre som normalt imens. Fugtsensoren findes automatisk på samme enhed som rumsensoren (fx en SHT4x). Forklaringen viser "🚿 … læringen holder pause til kl. 08:15".
+
 ## Automatisk tuning
 
 En gang i døgnet ser Smart TRV på, hvordan rummet har opført sig, når det regulerer roligt. Opstarten om morgenen, udluftning og helt åben ventil tæller ikke med.

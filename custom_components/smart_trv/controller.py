@@ -57,6 +57,7 @@ class PIController:
         trv_temp: float | None = None,
         feedforward: float = 0.0,
         valve_position: float | None = None,
+        learn: bool = True,
     ) -> float:
         """Return the TRV setpoint, rounded to the TRV's step.
 
@@ -78,7 +79,8 @@ class PIController:
                 current - trv_temp >= self.valve_margin and self.error > 0
             ) or (trv_temp - current >= self.valve_margin and self.error < 0)
 
-        if dt_hours > 0 and not self.valve_saturated:
+        # learn=False: a sudden spike (shower, cooking) says nothing about the radiator.
+        if dt_hours > 0 and learn and not self.valve_saturated:
             learn = self._clamp(self.error, -self.integral_band, self.integral_band)
             candidate = self._clamp(
                 self.integral + self.ki * learn * dt_hours,

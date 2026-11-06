@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import deque
 from datetime import datetime, timedelta
 import logging
 from typing import Any
@@ -99,6 +100,12 @@ RESEND_AFTER = timedelta(minutes=10)
 # Longest gap fed into the integral, so a long outage doesn't cause a jump.
 MAX_DT_HOURS = 0.5
 
+# A room warming this much within the window is a shower or cooking, not the radiator.
+SPIKE_WINDOW = timedelta(minutes=15)
+SPIKE_RISE = 0.6
+SPIKE_PAUSE = timedelta(minutes=60)
+HUMIDITY_RISE = 8.0  # %-points within SPIKE_WINDOW: someone is showering
+
 ATTR_DAY_TEMPERATURE = "day_temperature"
 ATTR_NIGHT_ACTIVE = "night_active"
 ATTR_PREHEATING = "preheating"
@@ -174,6 +181,14 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
         self._trvs_off = False
         self._full_open_since: datetime | None = None
         self._full_open_trv_start: float | None = None
+        # The mirror image: told to close, but the radiator stays hot (valve doesn't shut).
+        self._closed_since: datetime | None = None
+        self._closed_trv_start: float | None = None
+        # Sudden heat (shower, cooking): recent room readings, and when learning resumes.
+        self._room_history: deque[tuple[datetime, float]] = deque()
+        self._humidity_history: deque[tuple[datetime, float]] = deque()
+        self._humidity_sensor: str | None = None  # found on the room sensor's device
+        self._spike_until: datetime | None = None
         # TRVs still reporting another setpoint than we sent, after a resend: trv -> (sent, reported)
         self._rejected: dict[str, tuple[float, float]] = {}
 
@@ -236,6 +251,7 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
                 self._tuner.last_change = last.attributes.get(ATTR_LAST_TUNING)
 
         self._find_battery_entities()
+        self._find_humidity_sensor()
         self._detect_trv_step()
         self._attr_current_temperature = self._read_float(self._room_sensor)
         self._window_off = self._any_window_open()  # already open at startup: no delay
@@ -244,7 +260,11 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
         self.async_on_remove(
             async_track_state_change_event(
                 self.hass,
-                [self._room_sensor, *self._windows, *filter(None, [self._night_entity])],
+                [
+                    self._room_sensor,
+                    *self._windows,
+                    *filter(None, [self._night_entity, self._humidity_sensor]),
+                ],
                 self._async_input_changed,
             )
         )
@@ -274,7 +294,11 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
             # Only show the new reading; the controller runs on the timer. Running it on every
             # sensor update made the TRV motor move every few minutes.
             self._attr_current_temperature = self._read_float(self._room_sensor)
+            self._check_spike(dt_util.utcnow(), self._attr_current_temperature)
             self._publish()
+            return
+        if event.data["entity_id"] == self._humidity_sensor:
+            self._check_humidity(dt_util.utcnow(), self._read_float(self._humidity_sensor))
             return
         if event.data["entity_id"] in self._windows:
             self._async_window_changed()
@@ -338,11 +362,16 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
         if self._attr_hvac_mode == HVACMode.OFF or self._window_open:
             self._last_run = now  # freeze the integral while not heating
             self._full_open_since = None
+            self._closed_since = None
             await self._async_turn_trvs_off()
             self._publish()
             return
 
         self._update_preheat(now)
+        # Keep a recent baseline even when the sensors are quiet, so a jump is measured from it.
+        self._check_spike(now, room)
+        if self._humidity_sensor:
+            self._check_humidity(now, self._read_float(self._humidity_sensor))
         target = self.target_temperature
         if room is None:
             self._publish()  # TRVs keep their last setpoint
@@ -366,6 +395,7 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
         self._trv_setpoint = self._pi.update(
             target, room, dt_hours, self._average_trv_temperature(), self._ff,
             self._valve_position(),
+            learn=not self._learning_paused(now),
         )
         self._learn(now, room, target, dt_hours)
         # Track how long the TRV has been asked for full heat, and what it read then: a radiator
@@ -376,6 +406,12 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
                 self._full_open_trv_start = self._average_trv_temperature()
         else:
             self._full_open_since = None
+        if self._pi.valve_saturated and self._pi.error < 0:
+            if self._closed_since is None:
+                self._closed_since = now
+                self._closed_trv_start = self._average_trv_temperature()
+        else:
+            self._closed_since = None
         _LOGGER.debug(
             "%s: room=%.2f target=%.2f error=%.2f integral=%.2f -> TRV %.1f",
             self.entity_id, room, target,
@@ -509,6 +545,22 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
             "day_target": self._day_target,
             "outdoor_ff": self._ff,
             "problems": self._problems,
+            "learning_paused_until": (
+                dt_util.as_local(self._spike_until).strftime("%H:%M")
+                if self._learning_paused(dt_util.utcnow())
+                else None
+            ),
+            "closed_hours": (
+                round((dt_util.utcnow() - self._closed_since).total_seconds() / 3600, 1)
+                if self._closed_since
+                else 0.0
+            ),
+            "closed_trv_drop": (
+                round(self._closed_trv_start - trv_temp, 1)
+                if self._closed_since and trv_temp is not None
+                and self._closed_trv_start is not None
+                else None
+            ),
             "full_open_hours": (
                 round((dt_util.utcnow() - self._full_open_since).total_seconds() / 3600, 1)
                 if self._full_open_since
@@ -570,11 +622,52 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
             return self._ff  # keep the last one through a sensor hiccup
         return round(max(0.0, self._outdoor_gain * (target - outdoor)), 2)
 
+    def _check_spike(self, now: datetime, room: float | None) -> None:
+        """Room warming much faster than a radiator can: a shower, cooking, a heater."""
+        if room is None:
+            return
+        self._room_history.append((now, room))
+        while self._room_history and now - self._room_history[0][0] > SPIKE_WINDOW:
+            self._room_history.popleft()
+        if room - min(r for _, r in self._room_history) >= SPIKE_RISE - 1e-6:
+            if not self._learning_paused(now):
+                _LOGGER.info("%s: sudden heat, pausing learning", self.entity_id)
+            self._spike_until = now + SPIKE_PAUSE
+
+    def _check_humidity(self, now: datetime, humidity: float | None) -> None:
+        """A fast humidity rise is a shower, even before the room has warmed."""
+        if humidity is None:
+            return
+        self._humidity_history.append((now, humidity))
+        while self._humidity_history and now - self._humidity_history[0][0] > SPIKE_WINDOW:
+            self._humidity_history.popleft()
+        if humidity - min(h for _, h in self._humidity_history) >= HUMIDITY_RISE - 1e-6:
+            if not self._learning_paused(now):
+                _LOGGER.info("%s: humidity jump (shower?), pausing learning", self.entity_id)
+            self._spike_until = now + SPIKE_PAUSE
+            self._publish()
+
+    def _find_humidity_sensor(self) -> None:
+        """The humidity sensor on the same device as the room sensor (e.g. an SHT4x)."""
+        reg = er.async_get(self.hass)
+        if (entry := reg.async_get(self._room_sensor)) is None or entry.device_id is None:
+            return
+        for other in er.async_entries_for_device(reg, entry.device_id):
+            if other.domain == "sensor" and (
+                other.device_class or other.original_device_class
+            ) == "humidity":
+                self._humidity_sensor = other.entity_id
+                return
+
+    def _learning_paused(self, now: datetime) -> bool:
+        return self._spike_until is not None and now < self._spike_until
+
     def _learn(self, now: datetime, room: float, target: float, dt_hours: float) -> None:
-        full_heat = self._pi.valve_saturated and self._pi.error > 0
+        paused = self._learning_paused(now)
+        full_heat = self._pi.valve_saturated and self._pi.error > 0 and not paused
         self._heat_rate.observe(now.timestamp() / 3600, room, full_heat)
 
-        if self._tuner is not None and dt_hours > 0:
+        if self._tuner is not None and dt_hours > 0 and not paused:
             steady = (
                 not self._pi.valve_saturated
                 and self._preheat_for is None
