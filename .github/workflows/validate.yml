@@ -15,8 +15,7 @@ jobs:
       - uses: hacs/action@main
         with:
           category: integration
-          # Brand images ship in custom_components/smart_trv/brand (HA 2026.10+), not home-assistant/brands.
-          ignore: brands
+          # No ignores: the hacs/default catalog only accepts a run without them.
 
   hassfest:
     name: Hassfest
