@@ -73,3 +73,20 @@ def test_lukewarm_trv_without_position_keeps_learning() -> None:
     for _ in range(24):
         pi.update(21.5, 21.2, 5 / 60, trv_temp=21.6)  # setpoint ~22.4 -> 0.8-1.3 above
     assert not pi.valve_saturated and pi.integral > 0.3
+
+
+async def test_trv_in_cold_air_warming_up_is_not_a_cold_radiator(hass: HomeAssistant, trv_calls, freezer) -> None:  # noqa: F811
+    """A TRV under a window reads below the room even on a hot radiator; its reading still rises."""
+    await setup_entry(hass)
+    set_trv(hass, local=19.5)
+    hass.states.async_set("sensor.stue_temperatur", "21.5")
+    await hass.services.async_call(
+        "climate", "set_temperature", {"entity_id": ENTITY, "temperature": 22.0}, blocking=True
+    )
+    await hass.async_block_till_done()
+    for k in range(30):  # 2.5 hours, TRV warms from 19.5 to 20.7 while still below the room
+        set_trv(hass, local=19.5 + 0.04 * k, setpoint=27.0)
+        freezer.tick(timedelta(minutes=5))
+        async_fire_time_changed(hass, dt_util.utcnow())
+        await hass.async_block_till_done()
+    assert "radiatoren bliver ikke varm" not in hass.states.get("sensor.stue_status").attributes["explanation"]

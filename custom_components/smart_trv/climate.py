@@ -173,6 +173,7 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
         self._last_sent: dict[str, tuple[float, datetime]] = {}
         self._trvs_off = False
         self._full_open_since: datetime | None = None
+        self._full_open_trv_start: float | None = None
         # TRVs still reporting another setpoint than we sent, after a resend: trv -> (sent, reported)
         self._rejected: dict[str, tuple[float, float]] = {}
 
@@ -200,6 +201,7 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
         # TRV health: battery sensors found through the device registry; trv -> problem text.
         self._battery_entities: dict[str, str] = {}
         self._position_entities: dict[str, str] = {}  # valve opening in %, e.g. TRV602
+        self._calibration_entities: dict[str, str] = {}  # Z2M local_temperature_calibration
         self._problems: dict[str, str] = {}
 
     # ----------------------------------------------------------------- lifecycle
@@ -366,9 +368,12 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
             self._valve_position(),
         )
         self._learn(now, room, target, dt_hours)
-        # Track how long the TRV has been asked for full heat, to spot a radiator that stays cold.
+        # Track how long the TRV has been asked for full heat, and what it read then: a radiator
+        # that warms makes the TRV's reading rise, wherever it sits (even in cold air by a window).
         if self._pi.valve_saturated and self._pi.error > 0:
-            self._full_open_since = self._full_open_since or now
+            if self._full_open_since is None:
+                self._full_open_since = now
+                self._full_open_trv_start = self._average_trv_temperature()
         else:
             self._full_open_since = None
         _LOGGER.debug(
@@ -475,6 +480,18 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
             "trv_temperature": trv_temp,
             "trv_temperatures": self._trv_temperatures(),
             "valve_position": self._valve_position(),
+            "calibrations": {
+                trv: value
+                for trv, entity in self._calibration_entities.items()
+                if (value := self._read_float(entity)) is not None
+            },
+            "calibration_known": bool(self._calibration_entities),
+            "full_open_trv_rise": (
+                round(trv_temp - self._full_open_trv_start, 1)
+                if self._full_open_since and trv_temp is not None
+                and self._full_open_trv_start is not None
+                else None
+            ),
             "rejected": dict(self._rejected),
             "window_pending": self._window_pending,
             "window_seconds_left": (
@@ -576,6 +593,11 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
             if (entry := reg.async_get(trv)) is None or entry.device_id is None:
                 continue
             for other in er.async_entries_for_device(reg, entry.device_id):
+                if other.domain == "number" and other.entity_id.endswith(
+                    "_local_temperature_calibration"
+                ):
+                    self._calibration_entities.setdefault(trv, other.entity_id)
+                    continue
                 if other.domain != "sensor":
                     continue
                 if (other.device_class or other.original_device_class) == "battery":

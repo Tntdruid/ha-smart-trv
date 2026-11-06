@@ -6,10 +6,12 @@ from typing import Any
 
 from .const import STATUS_HEATING, STATUS_NO_SENSOR, STATUS_OFF, STATUS_WINDOW
 
-# A TRV this much colder than the room almost certainly has a calibration offset set.
-CALIBRATION_WARN_DELTA = 2.0
-# Asked for full heat this long while the TRV (on the radiator) is still not warmer than the room.
+# Without a readable calibration entity: a TRV this much colder than the room is more than cold
+# air by a window can explain (Stue's TRVs under the window read ~2 °C below the room).
+CALIBRATION_WARN_DELTA = 4.0
+# Fully open this long while the TRV's own reading rose less than this: the radiator stays cold.
 COLD_RADIATOR_HOURS = 2.0
+COLD_RADIATOR_RISE = 0.5
 
 
 def _c(value: float | None) -> str:
@@ -85,16 +87,13 @@ def _explain_control(diag: dict[str, Any], room: float | None, target: float | N
     )
     trv = diag["trv_temperature"]
     hours = diag.get("full_open_hours", 0.0)
-    if (
-        hours >= COLD_RADIATOR_HOURS
-        and trv is not None
-        and room is not None
-        and room - trv < CALIBRATION_WARN_DELTA
-        and trv < room + 1.0
-    ):
+    rise = diag.get("full_open_trv_rise")
+    # Judged by whether the TRV's reading rises, not by how warm it is: a TRV under a window
+    # reads below the room even on a hot radiator.
+    if hours >= COLD_RADIATOR_HOURS and rise is not None and rise < COLD_RADIATOR_RISE:
         text += (
             f" ⚠️ TRV'en har været helt åben i {hours:.1f} t".replace(".", ",")
-            + f", men måler stadig kun {_c(trv)}: radiatoren bliver ikke varm. Test: skru "
+            + f", men dens måling er kun steget {_c(rise)}: radiatoren bliver ikke varm. Test: skru "
             "TRV'en af i 30 min (så er ventilen helt åben). Bliver radiatoren varm, sidder fejlen "
             "i TRV'en/adapteren (ventilstiften trykkes ikke fri). Forbliver den kold, er det "
             "varmeforsyningen: fyr/fjernvarme, en lukket returventil eller fastsiddende ventilstift."
@@ -105,10 +104,19 @@ def _explain_control(diag: dict[str, Any], room: float | None, target: float | N
             "TRV'en tager ikke imod setpunktet. Tjek dens max_temperature i Zigbee2MQTT "
             "(sæt den til 35 °C) og at den står i preset manual."
         )
-    if trv is not None and room is not None and room - trv >= CALIBRATION_WARN_DELTA:
+    if diag.get("calibration_known"):
+        # Read from the TRV itself: only a real offset is worth a warning.
+        for trv_id, value in (diag.get("calibrations") or {}).items():
+            if abs(value) >= 0.1:
+                text += (
+                    f" ⚠️ {trv_id} har local_temperature_calibration {_c(value)}. Sæt den til 0 "
+                    "i Zigbee2MQTT og kør smart_trv.reset_integral."
+                )
+    elif trv is not None and room is not None and room - trv >= CALIBRATION_WARN_DELTA:
+        # Can't read the calibration: only warn when the gap is too big for cold air alone.
         text += (
-            f" ⚠️ TRV'en måler {_c(room - trv)} koldere end rummet. Det er næsten altid en "
-            "gammel local_temperature_calibration fra en tidligere styring: sæt den til 0 "
-            "i Zigbee2MQTT og kør smart_trv.reset_integral."
+            f" ⚠️ TRV'en måler {_c(room - trv)} koldere end rummet. Sidder den i kold luft, fx "
+            "under et vindue, er det fint. Ellers tjek local_temperature_calibration i "
+            "Zigbee2MQTT (skal være 0)."
         )
     return text
