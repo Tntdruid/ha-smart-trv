@@ -74,6 +74,8 @@ TEXT: dict[str, dict[str, str]] = {
         "problem_offline": "offline",
         "problem_silent": "ingen kontakt i {h} t",
         "problem_battery": "lavt batteri ({pct} %)",
+        "preheat_late": "Forvarmningen kom {amount} for sent: starter tidligere fremover",
+        "preheat_early": "Rummet var varmt {minutes} min før natten sluttede: starter senere fremover",
     },
     "en": {
         "off": "Off. The TRVs are off.",
@@ -126,6 +128,8 @@ TEXT: dict[str, dict[str, str]] = {
         "problem_offline": "offline",
         "problem_silent": "no contact for {h} h",
         "problem_battery": "low battery ({pct} %)",
+        "preheat_late": "Preheating was {amount} short: starting earlier from now on",
+        "preheat_early": "The room was warm {minutes} min before the night ended: starting later from now on",
     },
 }
 
@@ -156,6 +160,14 @@ def problem_text(code: str, value: float | None, lang: str) -> str:
     if code == "battery":
         return t["problem_battery"].format(pct=f"{value:.0f}")
     return t["problem_offline"]
+
+
+def preheat_text(verdict: str, amount: float, lang: str) -> str:
+    """What the morning taught the preheat timing, in the given language."""
+    t = TEXT[lang]
+    if verdict == "late":
+        return t["preheat_late"].format(amount=_c(amount, lang))
+    return t["preheat_early"].format(minutes=f"{amount * 60:.0f}")
 
 
 def explain(diag: dict[str, Any], room: float | None, target: float | None, lang: str = "da") -> str:

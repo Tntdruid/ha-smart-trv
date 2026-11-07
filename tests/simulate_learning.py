@@ -35,6 +35,8 @@ def run(days, preheat=True, kp=3.0, ki=1.0, tune=False, seed=1, noise=0.03, rad_
     room, rad = 21.0, 0.3
     pi = PIController(kp=kp, ki=ki, max_boost=6.0, max_cut=3.0, step=STEP, hysteresis=STEP)
     rate = learning.HeatRateLearner()
+    timing = learning.PreheatTiming()
+    run_start = None
     tuner = learning.AutoTuner(kp=kp, ki=ki) if tune else None
     preheat_for, last_target, setpoint = None, None, DAY
     at_wakeup, bands, gains = [], [], []
@@ -45,16 +47,22 @@ def run(days, preheat=True, kp=3.0, ki=1.0, tune=False, seed=1, noise=0.03, rad_
         if minute % 5 == 0:
             # night ends at the next 06:00
             night_end = minute - tod + NIGHT_END + (1440 if tod >= NIGHT_END else 0)
+            out = outdoor(minute)
+            if preheat_for is not None and minute >= preheat_for:
+                timing.learn((preheat_for - run_start) / 60, max(0.0, DAY - room), 0.0, rate.rate_at(out))
             if not is_night(tod):
                 preheat_for = None
             elif preheat and preheat_for != night_end:
-                need = learning.preheat_hours(rate.rate, room, DAY)
+                need = learning.preheat_hours(
+                    rate.rate_at(out), room, DAY, rate.dead_time, timing.factor
+                )
                 if need > 0 and minute >= night_end - need * 60:
-                    preheat_for = night_end
+                    preheat_for, run_start = night_end, minute
             target = NIGHT if is_night(tod) and preheat_for is None else DAY
             measured = room + rnd.gauss(0, noise)
             setpoint = pi.update(target, measured, 5 / 60 if minute else 0, trv_local)
-            rate.observe(minute / 60, room, pi.valve_saturated and pi.error > 0)
+            rate.observe(minute / 60, room, pi.valve_saturated and pi.error > 0, out)
+            rate.observe_cooling(minute / 60, room, pi.valve_saturated and pi.error < 0, out)
             if tuner:
                 steady = not pi.valve_saturated and preheat_for is None and target == last_target
                 if tuner.observe(pi.error, 5 / 60, steady):

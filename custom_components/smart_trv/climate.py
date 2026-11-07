@@ -90,8 +90,8 @@ from .const import (
     TRV_MIN_TEMP,
 )
 from .controller import PIController
-from .learning import AutoTuner, HeatRateLearner, preheat_hours
-from .diagnostics_text import explain, language, problem_text
+from .learning import MAX_PREHEAT_HOURS, AutoTuner, HeatRateLearner, PreheatTiming, preheat_hours
+from .diagnostics_text import explain, language, preheat_text, problem_text
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -111,6 +111,11 @@ ATTR_NIGHT_ACTIVE = "night_active"
 ATTR_PREHEATING = "preheating"
 ATTR_HEAT_RATE = "heat_rate"
 ATTR_HEAT_RATE_SAMPLES = "heat_rate_samples"
+ATTR_PREHEAT_LEAD = "preheat_lead_minutes"  # radiator warm-up before the room starts to warm
+ATTR_PREHEAT_FACTOR = "preheat_factor"
+ATTR_PREHEAT_LEARNING = "preheat_learning"
+ATTR_LAST_PREHEAT = "last_preheat"
+PREHEAT_REACHED = 0.1  # °C below the target counts as warm
 ATTR_KP = "kp"
 ATTR_KI = "ki"
 ATTR_TUNED_FROM = "tuned_from"  # the configured Kp/Ki the tuned values started from
@@ -206,6 +211,11 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
         self._preheat_enabled = bool(conf.get(CONF_PREHEAT, DEFAULT_PREHEAT))
         self._heat_rate = HeatRateLearner()
         self._preheat_for: datetime | None = None  # the night end we are preheating for
+        self._preheat_timing = PreheatTiming()
+        # The running preheat: when it started, whether it was capped, when the room got warm,
+        # and whether a window or a shower spoiled it as a lesson.
+        self._preheat_run: dict[str, Any] | None = None
+        self._last_preheat: str | None = None
 
         # Auto-tuning starts from the configured Kp/Ki and nudges them once a day.
         self._opt_gains = [self._pi.kp, self._pi.ki]
@@ -243,6 +253,11 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
             if (rate := last.attributes.get(ATTR_HEAT_RATE)) is not None:
                 self._heat_rate.rate = float(rate)
                 self._heat_rate.samples = int(last.attributes.get(ATTR_HEAT_RATE_SAMPLES) or 1)
+            if isinstance(model := last.attributes.get(ATTR_PREHEAT_LEARNING), dict):
+                self._heat_rate.load(model)
+            if (factor := last.attributes.get(ATTR_PREHEAT_FACTOR)) is not None:
+                self._preheat_timing.factor = float(factor)
+            self._last_preheat = last.attributes.get(ATTR_LAST_PREHEAT)
             # Keep tuned gains only while the configured ones are unchanged.
             if (
                 self._tuner is not None
@@ -366,6 +381,8 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
             self._last_run = now  # freeze the integral while not heating
             self._full_open_since = None
             self._closed_since = None
+            if self._preheat_run is not None:
+                self._preheat_run["disturbed"] = True
             await self._async_turn_trvs_off()
             self._publish()
             return
@@ -597,7 +614,45 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
             nxt = dt_util.parse_datetime(nxt)
         return nxt if isinstance(nxt, datetime) else None
 
+    def _outdoor(self) -> float | None:
+        return self._read_float(self._outdoor_sensor) if self._outdoor_sensor else None
+
+    def _preheat_rate(self) -> float:
+        return self._heat_rate.rate_at(self._outdoor())
+
+    def _follow_preheat(self, now: datetime) -> None:
+        """Watch the running preheat, and learn from it when the night has ended."""
+        run = self._preheat_run
+        if run is None:
+            return
+        room = self._room_temp
+        if self._learning_paused(now):
+            run["disturbed"] = True
+        if self._preheat_for is not None and now < self._preheat_for:
+            if room is not None and run["reached"] is None and room >= self._day_target - PREHEAT_REACHED:
+                run["reached"] = now
+            return
+        self._preheat_run = None
+        if run["disturbed"] or run["capped"] or room is None or run["end"] is None:
+            return
+        if now < run["end"] or now - run["end"] > timedelta(minutes=30):
+            # Stopped before the night ended (preheat or schedule changed), or we weren't
+            # running when it ended (restart, mode off): nothing to learn.
+            return
+        ran = (run["end"] - run["start"]).total_seconds() / 3600
+        short_by = max(0.0, self._day_target - room)
+        early = (
+            (run["end"] - run["reached"]).total_seconds() / 3600 if run["reached"] is not None else 0.0
+        )
+        result = self._preheat_timing.learn(ran, short_by, early, self._preheat_rate())
+        if result is not None:
+            self._last_preheat = preheat_text(*result, self._lang)
+            _LOGGER.info(
+                "%s: %s (factor %.2f)", self.entity_id, self._last_preheat, self._preheat_timing.factor
+            )
+
     def _update_preheat(self, now: datetime) -> None:
+        self._follow_preheat(now)
         nxt = self._night_end()
         if not (self._preheat_enabled and self._night_scheduled) or nxt is None or now >= nxt:
             self._preheat_for = None
@@ -607,12 +662,24 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
         room = self._room_temp
         if room is None:
             return
-        hours = preheat_hours(self._heat_rate.rate, room, self._day_target)
+        rate = self._preheat_rate()
+        hours = preheat_hours(
+            rate, room, self._day_target, self._heat_rate.dead_time, self._preheat_timing.factor
+        )
         if hours > 0 and now >= nxt - timedelta(hours=hours):
             self._preheat_for = nxt
+            self._preheat_run = {
+                "start": now,
+                "end": nxt,
+                "capped": hours >= MAX_PREHEAT_HOURS - 1e-6,
+                "reached": None,
+                "disturbed": self._window_open or self._learning_paused(now),
+            }
             _LOGGER.info(
-                "%s: preheating %.1f h before the night ends (%.2f °C/h)",
-                self.entity_id, hours, self._heat_rate.rate,
+                "%s: preheating %.1f h before the night ends (%.0f min radiator warm-up, "
+                "%.2f °C/h, factor %.2f)",
+                self.entity_id, hours, self._heat_rate.dead_time * 60, rate,
+                self._preheat_timing.factor,
             )
 
     def _outdoor_feedforward(self, target: float) -> float:
@@ -666,7 +733,12 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
     def _learn(self, now: datetime, room: float, target: float, dt_hours: float) -> None:
         paused = self._learning_paused(now)
         full_heat = self._pi.valve_saturated and self._pi.error > 0 and not paused
-        self._heat_rate.observe(now.timestamp() / 3600, room, full_heat)
+        outdoor = self._outdoor()
+        hours = now.timestamp() / 3600
+        self._heat_rate.observe(hours, room, full_heat, outdoor)
+        # Valve shut and the room cooling: how fast the room loses heat to the outside.
+        closed = self._pi.valve_saturated and self._pi.error < 0 and not paused
+        self._heat_rate.observe_cooling(hours, room, closed, outdoor)
 
         if self._tuner is not None and dt_hours > 0 and not paused:
             steady = (
@@ -847,6 +919,10 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
             ATTR_PREHEATING: self._preheat_for is not None,
             ATTR_HEAT_RATE: round(self._heat_rate.rate, 2),
             ATTR_HEAT_RATE_SAMPLES: self._heat_rate.samples,
+            ATTR_PREHEAT_LEAD: round(self._heat_rate.dead_time * 60),
+            ATTR_PREHEAT_FACTOR: self._preheat_timing.factor,
+            ATTR_PREHEAT_LEARNING: self._heat_rate.to_dict(),
+            ATTR_LAST_PREHEAT: self._last_preheat,
             ATTR_KP: self._pi.kp,
             ATTR_KI: self._pi.ki,
             ATTR_TUNED_FROM: self._opt_gains,

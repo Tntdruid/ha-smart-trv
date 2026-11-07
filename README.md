@@ -126,9 +126,22 @@ Preview without Home Assistant: run `python -m http.server` in the repository an
 
 ## Preheat
 
-If the room uses a **schedule** as its night schedule, Smart TRV starts heating early enough that the room *is* at day temperature when the night ends (the schedule's `next_event`). It learns the room's warm-up rate (°C/h) at full heat; until it has measured, it assumes 1 °C/h. It preheats at most 6 hours ahead. Meanwhile the explanation shows "☀️ Preheating: the room should be 22.0 °C at 06:00". Can be turned off under Configure → *Preheat before the night ends*.
+If the room uses a **schedule** as its night schedule, Smart TRV starts heating early enough that the room *is* at day temperature when the night ends (the schedule's `next_event`). It preheats at most 6 hours ahead. Meanwhile the explanation shows "☀️ Preheating: the room should be 22.0 °C at 06:00". Can be turned off under Configure → *Preheat before the night ends*.
 
-Simulation (`python tests/simulate_learning.py`), night 19 °C until 06:00, day 22 °C: the room is 22.0 °C at 06:00 with preheat, against 19.0 °C without.
+It learns three things about each room, all by itself:
+
+- **Radiator warm-up time:** how long from the valve opening until the room starts to warm (the radiator and its water must heat up first). Measured each time the valve opens after being shut for an hour or more. Starts at 20 min.
+- **Warm-up rate and the weather:** how fast the room then warms (°C/h), and how much slower it goes when it is cold outside. With an outdoor sensor it measures how fast the room cools at night with the valve shut. A room that loses heat fast also warms slower on a cold morning, so it starts earlier when it is cold and later when it is mild. Once it has warmed up in different weather, it uses those measurements directly.
+- **Each morning's result:** if the room was short of the target when the night ended, it starts earlier next time. If it was warm more than 30 minutes early, it starts a little later. Mornings with an open window or a shower teach it nothing.
+
+The climate entity shows what it has learned: `heat_rate`, `preheat_lead_minutes` (radiator warm-up), `preheat_factor` (the morning correction) and `last_preheat` (what the last morning taught it).
+
+Simulation (`python tests/simulate_preheat.py`) of 5 × 3 weeks with the weather changing day to day and a slow radiator, the last 14 mornings of each:
+
+| | Late mornings | Worst | Warm too early (average) |
+|---|---|---|---|
+| Before (one rate, +20 %) | 8 of 70 | 1.0 °C short | 32 min |
+| Now | 4 of 70 | 0.3 °C short | 15 min |
 
 ## Outdoor temperature
 

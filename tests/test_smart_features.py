@@ -59,7 +59,8 @@ def test_heat_rate_is_learned_at_full_heat() -> None:
 
 def test_preheat_hours() -> None:
     assert preheat_hours(1.0, 22.5, 22.0) == 0
-    assert preheat_hours(1.0, 21.0, 22.0) == 1.2  # 1 °C at 1 °C/h, +20 % margin
+    assert preheat_hours(1.0, 21.0, 22.0, factor=1.2) == 1.2  # 1 °C at 1 °C/h, +20 % margin
+    assert abs(preheat_hours(1.0, 21.0, 22.0, dead_time=0.5, factor=1.0) - 1.5) < 1e-9
     assert preheat_hours(0.1, 15.0, 22.0) == 6.0  # capped
 
 
