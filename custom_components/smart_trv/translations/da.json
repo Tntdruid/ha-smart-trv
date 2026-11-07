@@ -118,6 +118,18 @@
       },
       "integral": {
         "name": "Lært offset (I)"
+      },
+      "preheat_lead": {
+        "name": "Radiatorens opstart"
+      },
+      "heat_rate": {
+        "name": "Opvarmningshastighed"
+      },
+      "preheat_factor": {
+        "name": "Forvarmningsfaktor"
+      },
+      "last_preheat": {
+        "name": "Sidste forvarmning"
       }
     },
     "number": {

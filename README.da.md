@@ -137,7 +137,14 @@ Den lærer selv tre ting om hvert rum:
 - **Opvarmningshastighed og vejret:** hvor hurtigt rummet derefter bliver varmere (°C/time), og hvor meget langsommere det går, når det er koldt udenfor. Med en udeføler måler den, hvor hurtigt rummet køler af om natten med lukket ventil. Et rum, der taber varmen hurtigt, varmer også langsommere op en kold morgen, så den starter tidligere, når det er koldt, og senere, når det er mildt. Når den har varmet op i forskelligt vejr, bruger den de målinger direkte.
 - **Hver morgens resultat:** var rummet ikke varmt nok, da natten sluttede, starter den tidligere næste gang. Var det varmt mere end 30 min for tidligt, starter den lidt senere. Morgener med åbent vindue eller bad lærer den ikke noget af.
 
-Klima-entiteten viser, hvad den har lært: `heat_rate`, `preheat_lead_minutes` (radiatorens opstart), `preheat_factor` (morgen-korrektionen) og `last_preheat` (hvad sidste morgen lærte den).
+Du kan se, hvad den har lært, under **Diagnostik** på rummets enhedsside:
+
+| Sensor | Viser |
+|---|---|
+| Radiatorens opstart | Minutter fra ventilen åbner, til rummet begynder at blive varmere |
+| Opvarmningshastighed | °C/time ved fuld varme i det nuværende vejr |
+| Forvarmningsfaktor | Morgen-korrektionen: over 1 starter tidligere, under 1 senere |
+| Sidste forvarmning | Hvad sidste morgen lærte den, f.eks. "Forvarmningen kom 0,3 °C for sent: starter tidligere fremover" |
 
 Simulering (`python tests/simulate_preheat.py`) af 5 × 3 uger, hvor vejret skifter fra dag til dag, med en langsom radiator, de sidste 14 morgener i hver:
 

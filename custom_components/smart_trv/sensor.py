@@ -12,7 +12,7 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_NAME, UnitOfTemperature
+from homeassistant.const import CONF_NAME, EntityCategory, UnitOfTemperature, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
@@ -61,6 +61,35 @@ SENSORS = (
     _temp("error"),
     _temp("p_term"),
     _temp("integral"),
+    # What preheat has learned about the room.
+    SmartTRVSensorDescription(
+        key="preheat_lead",
+        translation_key="preheat_lead",
+        native_unit_of_measurement=UnitOfTime.MINUTES,
+        device_class=SensorDeviceClass.DURATION,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        suggested_display_precision=0,
+    ),
+    SmartTRVSensorDescription(
+        key="heat_rate",
+        translation_key="heat_rate",
+        native_unit_of_measurement="°C/h",
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        suggested_display_precision=2,
+    ),
+    SmartTRVSensorDescription(
+        key="preheat_factor",
+        translation_key="preheat_factor",
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        suggested_display_precision=2,
+    ),
+    SmartTRVSensorDescription(
+        key="last_preheat",
+        translation_key="last_preheat",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
 )
 
 

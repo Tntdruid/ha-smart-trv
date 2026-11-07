@@ -134,7 +134,14 @@ It learns three things about each room, all by itself:
 - **Warm-up rate and the weather:** how fast the room then warms (°C/h), and how much slower it goes when it is cold outside. With an outdoor sensor it measures how fast the room cools at night with the valve shut. A room that loses heat fast also warms slower on a cold morning, so it starts earlier when it is cold and later when it is mild. Once it has warmed up in different weather, it uses those measurements directly.
 - **Each morning's result:** if the room was short of the target when the night ended, it starts earlier next time. If it was warm more than 30 minutes early, it starts a little later. Mornings with an open window or a shower teach it nothing.
 
-The climate entity shows what it has learned: `heat_rate`, `preheat_lead_minutes` (radiator warm-up), `preheat_factor` (the morning correction) and `last_preheat` (what the last morning taught it).
+You can see what it has learned under **Diagnostics** on the room's device page:
+
+| Sensor | Shows |
+|---|---|
+| Radiator warm-up | Minutes from the valve opening until the room starts to warm |
+| Warm-up rate | °C/h at full heat in the current weather |
+| Preheat factor | The morning correction: above 1 starts earlier, below 1 later |
+| Last preheat | What the last morning taught it, e.g. "Preheating was 0.3 °C short: starting earlier from now on" |
 
 Simulation (`python tests/simulate_preheat.py`) of 5 × 3 weeks with the weather changing day to day and a slow radiator, the last 14 mornings of each:
 

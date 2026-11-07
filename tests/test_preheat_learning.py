@@ -171,3 +171,20 @@ def test_night_cooling_gives_the_weather_dependence() -> None:
     assert learner.loss is not None and abs(learner.loss - 0.05) < 0.01
     assert learner.rate_at(-5) < 0.8 < learner.rate_at(10)
     assert abs(learner.rate_at(-5) - (0.8 - 0.5)) < 0.1
+
+
+async def test_preheat_learning_has_diagnostic_sensors(hass: HomeAssistant, trv_calls, freezer) -> None:  # noqa: F811
+    from homeassistant.helpers import entity_registry as er
+
+    end = await start_preheat(hass, 3.0)
+    assert hass.states.get("sensor.stue_preheat_lead").state == "20"
+    assert hass.states.get("sensor.stue_heat_rate").state == "1.0"
+    assert hass.states.get("sensor.stue_preheat_factor").state == "1.1"
+    assert hass.states.get("sensor.stue_last_preheat").state == "unknown"
+    reg = er.async_get(hass)
+    for key in ("preheat_lead", "heat_rate", "preheat_factor", "last_preheat"):
+        assert reg.async_get(f"sensor.stue_{key}").entity_category == "diagnostic"
+
+    await run_until(hass, freezer, end, room_at=lambda left: min(21.5, 19.5 + (3 - left) * 0.7))
+    assert hass.states.get("sensor.stue_last_preheat").state.startswith("Forvarmningen kom")
+    assert float(hass.states.get("sensor.stue_preheat_factor").state) > 1.1

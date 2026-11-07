@@ -118,6 +118,18 @@
       },
       "integral": {
         "name": "Learned offset (I)"
+      },
+      "preheat_lead": {
+        "name": "Radiator warm-up"
+      },
+      "heat_rate": {
+        "name": "Warm-up rate"
+      },
+      "preheat_factor": {
+        "name": "Preheat factor"
+      },
+      "last_preheat": {
+        "name": "Last preheat"
       }
     },
     "number": {

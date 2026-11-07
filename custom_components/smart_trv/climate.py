@@ -560,6 +560,11 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
             "error": round(self._pi.error, 2),
             "p_term": round(self._pi.kp * self._pi.error, 2),
             "integral": round(self._pi.integral, 2),
+            # What preheat has learned (diagnostic sensors).
+            "preheat_lead": round(self._heat_rate.dead_time * 60),
+            "heat_rate": round(self._preheat_rate(), 2),
+            "preheat_factor": round(self._preheat_timing.factor, 2),
+            "last_preheat": self._last_preheat,
             "night_active": self._night_active,
             "preheat_until": (
                 dt_util.as_local(self._preheat_for).strftime("%H:%M") if self._preheat_for else None
