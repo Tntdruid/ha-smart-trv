@@ -1,7 +1,11 @@
 """The explanation follows Home Assistant's language: Danish for da, English otherwise."""
 
+from datetime import timedelta
+
 import pytest
 from homeassistant.core import HomeAssistant
+from homeassistant.util import dt as dt_util
+from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
 from custom_components.smart_trv.diagnostics_text import language
 
@@ -41,10 +45,13 @@ async def test_danish(hass: HomeAssistant, trv_calls) -> None:  # noqa: F811
 
 
 @pytest.mark.real_language
-async def test_problem_text_follows_language(hass: HomeAssistant, trv_calls) -> None:  # noqa: F811
+async def test_problem_text_follows_language(hass: HomeAssistant, trv_calls, freezer) -> None:  # noqa: F811
     hass.config.language = "en"
     await setup_entry(hass)
     hass.states.async_set("climate.tv02_stue", "unavailable")
+    await hass.async_block_till_done()
+    freezer.tick(timedelta(minutes=20))
+    async_fire_time_changed(hass, dt_util.utcnow())
     await hass.async_block_till_done()
     assert hass.states.get("binary_sensor.stue_problem").attributes["climate.tv02_stue"] == "offline"
     assert "⚠️ climate.tv02_stue: offline." in hass.states.get("sensor.stue_status").attributes["explanation"]

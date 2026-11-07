@@ -165,16 +165,31 @@ async def test_preheat_can_be_turned_off(hass: HomeAssistant, trv_calls) -> None
     assert hass.states.get(ENTITY).attributes["preheating"] is False
 
 
-async def test_offline_trv_is_a_problem(hass: HomeAssistant, trv_calls) -> None:  # noqa: F811
+async def test_offline_trv_is_a_problem(hass: HomeAssistant, trv_calls, freezer) -> None:  # noqa: F811
     await setup_room(hass)
     assert hass.states.get("binary_sensor.stue_problem").state == "off"
 
     hass.states.async_set("climate.tv02_stue", "unavailable")
     await hass.async_block_till_done()
+    await tick(hass, freezer, 10)  # a short dropout (e.g. Zigbee2MQTT restarting) is fine
+    assert hass.states.get("binary_sensor.stue_problem").state == "off"
+    assert "offline" not in hass.states.get("sensor.stue_status").attributes["explanation"]
+
+    await tick(hass, freezer, 10)  # gone for 20 min: a problem
     problem = hass.states.get("binary_sensor.stue_problem")
     assert problem.state == "on"
     assert problem.attributes["climate.tv02_stue"] == "offline"
     assert "⚠️ climate.tv02_stue: offline." in hass.states.get("sensor.stue_status").attributes["explanation"]
+
+
+async def test_trv_coming_up_after_restart_is_no_problem(hass: HomeAssistant, trv_calls, freezer) -> None:  # noqa: F811
+    hass.states.async_set("climate.tv02_stue", "unavailable")  # Zigbee2MQTT not up yet
+    await setup_room(hass, trv_state=None)
+    await tick(hass, freezer)
+    assert hass.states.get("binary_sensor.stue_problem").state == "off"
+    set_trv(hass)
+    await tick(hass, freezer, 20)
+    assert hass.states.get("binary_sensor.stue_problem").state == "off"
 
 
 async def test_low_battery_is_found_through_the_device(hass: HomeAssistant, trv_calls) -> None:  # noqa: F811

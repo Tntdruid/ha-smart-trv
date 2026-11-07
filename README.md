@@ -149,7 +149,7 @@ Choose an outdoor sensor under Configure. Smart TRV then adds `0.1 × (target �
 
 ## TRV monitoring
 
-`binary_sensor.<room>_problem` turns on when a TRV is **offline**, hasn't reported for **6 hours**, or has **less than 20 % battery**. The battery sensor is found through the TRV's device. The problem also shows as ⚠️ in the explanation, and the **Whole house** view of the dashboard template lists all rooms and their problems. Use the sensor in an automation for a notification.
+`binary_sensor.<room>_problem` turns on when a TRV has been **offline for 15 minutes** (so a restart, where Zigbee2MQTT comes up after Home Assistant, or a short dropout doesn't count), hasn't reported for **6 hours**, or has **less than 20 % battery**. The battery sensor is found through the TRV's device. The problem also shows as ⚠️ in the explanation, and the **Whole house** view of the dashboard template lists all rooms and their problems. Use the sensor in an automation for a notification.
 
 ## Valve that doesn't close
 

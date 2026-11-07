@@ -30,6 +30,9 @@ DEFAULT_PREHEAT = True
 
 # A TRV that hasn't reported for this long, or whose battery is this low, is a problem.
 TRV_STALE_HOURS = 6
+# Unavailable this long before a TRV counts as offline: Zigbee2MQTT often comes up after
+# Home Assistant, and a TRV can drop out for a moment.
+TRV_OFFLINE_MINUTES = 15
 BATTERY_LOW = 20
 
 TRV_MIN_TEMP = 5.0

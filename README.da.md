@@ -152,7 +152,7 @@ Vælg en udesensor under Konfigurer (fx `sensor.ude_ude_temperatur`). Så lægge
 
 ## Overvågning af TRV'er
 
-`binary_sensor.<rum>_problem` tænder, når en TRV er **offline**, ikke har meldt sig i **6 timer**, eller har **under 20 % batteri**. Batterisensoren findes selv via TRV'ens enhed. Problemet står også som ⚠️ i forklaringen, og fanen **Hele huset** i dashboard-skabelonen samler alle rum og deres problemer. Brug sensoren i en automation, hvis du vil have en notifikation.
+`binary_sensor.<rum>_problem` tænder, når en TRV har været **offline i 15 minutter** (så en genstart, hvor Zigbee2MQTT starter efter Home Assistant, eller et kort udfald ikke tæller med), ikke har meldt sig i **6 timer**, eller har **under 20 % batteri**. Batterisensoren findes selv via TRV'ens enhed. Problemet står også som ⚠️ i forklaringen, og fanen **Hele huset** i dashboard-skabelonen samler alle rum og deres problemer. Brug sensoren i en automation, hvis du vil have en notifikation.
 
 ## Ventil der ikke lukker
 

@@ -86,6 +86,7 @@ from .const import (
     STATUS_OFF,
     STATUS_WINDOW,
     TRV_MAX_TEMP,
+    TRV_OFFLINE_MINUTES,
     TRV_STALE_HOURS,
     TRV_MIN_TEMP,
 )
@@ -231,6 +232,7 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
         self._position_entities: dict[str, str] = {}  # valve opening in %, e.g. TRV602
         self._calibration_entities: dict[str, str] = {}  # Z2M local_temperature_calibration
         self._problems: dict[str, str] = {}
+        self._started = dt_util.utcnow()
 
     # ----------------------------------------------------------------- lifecycle
 
@@ -803,7 +805,10 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
         for trv in self._trvs:
             state = self.hass.states.get(trv)
             if state is None or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
-                problems[trv] = problem_text("offline", None, self._lang)
+                # Only after a while: right after a restart, or a short dropout, isn't a problem.
+                since = self._started if state is None else max(state.last_changed, self._started)
+                if now - since >= timedelta(minutes=TRV_OFFLINE_MINUTES):
+                    problems[trv] = problem_text("offline", None, self._lang)
                 continue
             silent = (now - state.last_reported).total_seconds() / 3600
             if silent >= TRV_STALE_HOURS:
