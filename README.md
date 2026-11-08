@@ -172,6 +172,8 @@ If sudden heat is still there 45 minutes later, with the room at least 1 °C war
 
 The explanation shows "🔥 Extra heat source", and `binary_sensor.<room>_heat_source` is on meanwhile, so you can use it in an automation.
 
+Does the heat reach other rooms? On the room with the stove, choose them under Configure → *Heat also reaches*. They then stop learning while the stove burns, and until they have cooled back to their own target. Their explanation shows "🔥 Heat from another room".
+
 ## Auto-tuning
 
 Once a day Smart TRV looks at how the room behaved while regulating calmly. Morning warm-up, airing and a fully open valve don't count.

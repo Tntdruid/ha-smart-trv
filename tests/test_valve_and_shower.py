@@ -228,3 +228,75 @@ async def test_shower_without_humidity_sensor_fades_and_is_not_a_stove(
     for _ in range(14):
         await tick(hass, freezer)
     assert not heat_source(hass)
+
+
+# ----------------------------------------------------------------- stove in another room
+
+GANG = "climate.gang"
+GANG_ROOM = "sensor.gang_temperatur"
+
+
+async def stove_and_hallway(hass: HomeAssistant, heats: list[str]) -> None:
+    mock_restore_cache(hass, [
+        State(ENTITY, "heat", {"day_temperature": 20.5, "pi_integral": 1.2}),
+        State(GANG, "heat", {"day_temperature": 21.0, "pi_integral": -1.0}),
+    ])
+    hass.states.async_set(ROOM, "20.5")
+    hass.states.async_set(GANG_ROOM, "21.4")
+    hass.states.async_set("binary_sensor.stue_vindue", "off")
+    set_trv(hass, local=20.0, setpoint=21.5)
+    hass.states.async_set("climate.tv02_gang", "heat", {
+        "temperature": 20.0, "current_temperature": 20.0, "preset_mode": "manual",
+        "preset_modes": ["auto", "manual"], "hvac_modes": ["off", "heat"],
+    })
+    for data in (
+        USER_INPUT | {"heats_rooms": heats},
+        USER_INPUT | {"name": "Gang", "room_sensor": GANG_ROOM, "trvs": ["climate.tv02_gang"]},
+    ):
+        entry = MockConfigEntry(domain="smart_trv", data=data)
+        entry.add_to_hass(hass)
+        assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+
+def gang_integral(hass) -> float:
+    return hass.states.get(GANG).attributes["pi_integral"]
+
+
+async def test_stove_pauses_learning_in_the_rooms_it_reaches(hass: HomeAssistant, trv_calls, freezer) -> None:  # noqa: F811
+    await stove_and_hallway(hass, [GANG])
+    await light_stove(hass, freezer)
+    assert heat_source(hass)
+    await tick(hass, freezer)
+    before = gang_integral(hass)
+    status = hass.states.get("sensor.gang_status").attributes["explanation"]
+    assert status.startswith("🔥 Varme fra et andet rum")
+    assert hass.states.get("binary_sensor.gang_heat_source").state == "off"
+
+    for _ in range(24):  # the hallway is warm and would otherwise learn from it
+        await tick(hass, freezer)
+    assert gang_integral(hass) == before
+
+    # Stove out and the living room back at its target; the hallway still warm: still paused.
+    await cool_to(hass, freezer, 25.0, 20.6, 2)
+    await cool_to(hass, freezer, 20.6, 20.6, 1)
+    assert not heat_source(hass)
+    await tick(hass, freezer)
+    assert gang_integral(hass) == before
+
+    # The hallway has cooled back as well: learning again.
+    hass.states.async_set(GANG_ROOM, "21.1")
+    for _ in range(9):
+        await tick(hass, freezer)
+    for _ in range(6):
+        await tick(hass, freezer)
+    assert "🔥" not in hass.states.get("sensor.gang_status").attributes["explanation"]
+    assert gang_integral(hass) != before
+
+
+async def test_rooms_the_stove_does_not_reach_keep_learning(hass: HomeAssistant, trv_calls, freezer) -> None:  # noqa: F811
+    await stove_and_hallway(hass, [])
+    await light_stove(hass, freezer)
+    assert heat_source(hass)
+    assert "🔥" not in hass.states.get("sensor.gang_status").attributes["explanation"]
+    assert gang_integral(hass) != -1.0

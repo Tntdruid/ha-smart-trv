@@ -19,7 +19,7 @@ from homeassistant.components.climate import (
     HVACAction,
     HVACMode,
 )
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.const import (
     ATTR_ENTITY_ID,
     ATTR_TEMPERATURE,
@@ -56,6 +56,7 @@ from .const import (
     CONF_KI,
     CONF_KP,
     CONF_AUTO_TUNE,
+    CONF_HEATS_ROOMS,
     CONF_OUTDOOR_GAIN,
     CONF_OUTDOOR_SENSOR,
     CONF_PREHEAT,
@@ -125,6 +126,7 @@ ATTR_PREHEAT_FACTOR = "preheat_factor"
 ATTR_PREHEAT_LEARNING = "preheat_learning"
 ATTR_LAST_PREHEAT = "last_preheat"
 ATTR_HEAT_SOURCE = "heat_source"
+ATTR_HEAT_FROM_ROOM = "heat_from_room"
 PREHEAT_REACHED = 0.1  # °C below the target counts as warm
 ATTR_KP = "kp"
 ATTR_KI = "ki"
@@ -211,6 +213,8 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
         self._spike_start: tuple[datetime, float] | None = None  # when it began, room before it
         self._heat_source_seen: datetime | None = None  # last sudden heat from a heat source
         self._heat_source_gone: datetime | None = None  # back near the target since
+        self._room_heat_seen: datetime | None = None  # another room's stove last burned
+        self._room_heat_gone: datetime | None = None  # it's out, and we're back near the target
         # TRVs still reporting another setpoint than we sent, after a resend: trv -> (sent, reported)
         self._rejected: dict[str, tuple[float, float]] = {}
 
@@ -275,6 +279,8 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
             self._last_preheat = last.attributes.get(ATTR_LAST_PREHEAT)
             if last.attributes.get(ATTR_HEAT_SOURCE):
                 self._heat_source_seen = dt_util.utcnow()  # a restart doesn't put the stove out
+            if last.attributes.get(ATTR_HEAT_FROM_ROOM):
+                self._room_heat_seen = dt_util.utcnow()
             # Keep tuned gains only while the configured ones are unchanged.
             if (
                 self._tuner is not None
@@ -576,6 +582,7 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
             "p_term": round(self._pi.kp * self._pi.error, 2),
             "integral": round(self._pi.integral, 2),
             "heat_source": self._heat_source_seen is not None,
+            "heat_from_room": self._room_heat_seen is not None,
             # What preheat has learned (diagnostic sensors).
             "preheat_lead": round(self._heat_rate.dead_time * 60),
             "heat_rate": round(self._preheat_rate(), 2),
@@ -729,6 +736,36 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
             if self._heat_source_seen is not None:
                 self._heat_source_seen = now  # still getting warmer: still burning
         self._follow_heat_source(now, room)
+        self._follow_room_heat(now, room)
+
+    def _other_room_burning(self) -> bool:
+        """Whether a room that lists this one under "heat reaches" has a heat source on."""
+        for entry in self.hass.config_entries.async_entries(DOMAIN):
+            if entry.entry_id == self._entry.entry_id or entry.state is not ConfigEntryState.LOADED:
+                continue
+            conf = {**entry.data, **entry.options}
+            if self.entity_id in (conf.get(CONF_HEATS_ROOMS) or []) and entry.runtime_data.diag.get(
+                "heat_source"
+            ):
+                return True
+        return False
+
+    def _follow_room_heat(self, now: datetime, room: float) -> None:
+        """A stove next door: no learning while it burns, nor until this room has cooled back."""
+        if self._other_room_burning():
+            self._room_heat_seen, self._room_heat_gone = now, None
+            return
+        if self._room_heat_seen is None:
+            return
+        if room > max(self._goal(), self._day_target) + HEAT_SOURCE_END + 1e-6:
+            self._room_heat_gone = None
+        elif self._room_heat_gone is None:
+            self._room_heat_gone = now
+        if (
+            self._room_heat_gone is not None and now - self._room_heat_gone >= HEAT_SOURCE_SETTLE
+        ) or now - self._room_heat_seen >= HEAT_SOURCE_MAX:
+            _LOGGER.info("%s: heat from the other room is gone, learning again", self.entity_id)
+            self._room_heat_seen = self._room_heat_gone = None
 
     def _follow_heat_source(self, now: datetime, room: float) -> None:
         """Tell a wood stove from a shower: it leaves the room well above the target for hours."""
@@ -785,7 +822,7 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
                 return
 
     def _learning_paused(self, now: datetime) -> bool:
-        return self._heat_source_seen is not None or (
+        return self._heat_source_seen is not None or self._room_heat_seen is not None or (
             self._spike_until is not None and now < self._spike_until
         )
 
@@ -986,6 +1023,7 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
             ATTR_PREHEAT_LEARNING: self._heat_rate.to_dict(),
             ATTR_LAST_PREHEAT: self._last_preheat,
             ATTR_HEAT_SOURCE: self._heat_source_seen is not None,
+            ATTR_HEAT_FROM_ROOM: self._room_heat_seen is not None,
             ATTR_KP: self._pi.kp,
             ATTR_KI: self._pi.ki,
             ATTR_TUNED_FROM: self._opt_gains,

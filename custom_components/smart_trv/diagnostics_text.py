@@ -40,6 +40,7 @@ TEXT: dict[str, dict[str, str]] = {
         "preheat": "☀️ Forvarmer: rummet skal være {target} kl. {time}, når natten slutter. ",
         "night": "🌙 Nattemperatur. ",
         "heat_source": "🔥 Ekstra varmekilde (fx brændeovn): læringen holder pause, til rummet er tilbage ved målet. ",
+        "heat_from_room": "🔥 Varme fra et andet rum (fx brændeovn): læringen holder pause, til rummet er tilbage ved målet. ",
         "paused": "🚿 Pludselig varme eller fugt (fx bad eller madlavning): læringen holder pause til kl. {time}. ",
         "parts": "Lært offset {i} + reaktion nu {p}",
         "parts_outdoor": " + udetemperatur {o}",
@@ -95,6 +96,7 @@ TEXT: dict[str, dict[str, str]] = {
         "preheat": "☀️ Preheating: the room should be {target} at {time}, when the night ends. ",
         "night": "🌙 Night temperature. ",
         "heat_source": "🔥 Extra heat source (e.g. a wood stove): learning paused until the room is back at its target. ",
+        "heat_from_room": "🔥 Heat from another room (e.g. a wood stove): learning paused until the room is back at its target. ",
         "paused": "🚿 Sudden heat or humidity (e.g. a shower or cooking): learning paused until {time}. ",
         "parts": "Learned offset {i} + reaction now {p}",
         "parts_outdoor": " + outdoor {o}",
@@ -229,6 +231,8 @@ def _explain_control(
         mode = t["night"]
     if diag.get("heat_source"):
         mode += t["heat_source"]
+    elif diag.get("heat_from_room"):
+        mode += t["heat_from_room"]
     elif diag.get("learning_paused_until"):
         mode += t["paused"].format(time=diag["learning_paused_until"])
 

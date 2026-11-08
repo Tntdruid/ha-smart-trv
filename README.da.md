@@ -175,6 +175,8 @@ Er pludselig varme der stadig 45 minutter senere, og er rummet mindst 1 °C varm
 
 I forklaringen står der "🔥 Ekstra varmekilde", og `binary_sensor.<rum>_heat_source` er tændt imens, så du kan bruge den i en automation.
 
+Når varmen også ud til andre rum? Vælg dem på rummet med brændeovnen under Konfigurer → *Varmen når også ud til*. De holder så pause med at lære, mens ovnen brænder, og indtil de er kølet ned til deres eget mål igen. I deres forklaring står der "🔥 Varme fra et andet rum".
+
 ## Automatisk tuning
 
 En gang i døgnet ser Smart TRV på, hvordan rummet har opført sig, når det regulerer roligt. Opstarten om morgenen, udluftning og helt åben ventil tæller ikke med.

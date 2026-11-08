@@ -12,7 +12,8 @@
           "window_open_delay": "Turn off after open (s)",
           "window_close_delay": "Back on after closed (s)",
           "outdoor_sensor": "Outdoor temperature",
-          "preheat": "Preheat before the night ends"
+          "preheat": "Preheat before the night ends",
+          "heats_rooms": "Heat also reaches"
         },
         "data_description": {
           "room_sensor": "The sensor that measures the temperature you actually care about.",
@@ -20,7 +21,8 @@
           "window_open_delay": "How long a window or door must stay open before the TRVs turn off. Walking through a door shouldn't turn the heating off. Default 60.",
           "window_close_delay": "How long it must stay closed before heating resumes. Default 0.",
           "outdoor_sensor": "Optional. Lets Smart TRV react to cold nights before the room cools down.",
-          "preheat": "Learns how fast the room warms and starts early, so it is warm when the night schedule ends. Needs a schedule as night schedule."
+          "preheat": "Learns how fast the room warms and starts early, so it is warm when the night schedule ends. Needs a schedule as night schedule.",
+          "heats_rooms": "Does this room have a wood stove or another heat source? Choose the other rooms its heat reaches. They then also stop learning while it burns."
         },
         "sections": {
           "advanced": {
@@ -55,7 +57,8 @@
           "window_open_delay": "Turn off after open (s)",
           "window_close_delay": "Back on after closed (s)",
           "outdoor_sensor": "Outdoor temperature",
-          "preheat": "Preheat before the night ends"
+          "preheat": "Preheat before the night ends",
+          "heats_rooms": "Heat also reaches"
         },
         "data_description": {
           "room_sensor": "The sensor that measures the temperature you actually care about.",
@@ -63,7 +66,8 @@
           "window_open_delay": "How long a window or door must stay open before the TRVs turn off. Walking through a door shouldn't turn the heating off. Default 60.",
           "window_close_delay": "How long it must stay closed before heating resumes. Default 0.",
           "outdoor_sensor": "Optional. Lets Smart TRV react to cold nights before the room cools down.",
-          "preheat": "Learns how fast the room warms and starts early, so it is warm when the night schedule ends. Needs a schedule as night schedule."
+          "preheat": "Learns how fast the room warms and starts early, so it is warm when the night schedule ends. Needs a schedule as night schedule.",
+          "heats_rooms": "Does this room have a wood stove or another heat source? Choose the other rooms its heat reaches. They then also stop learning while it burns."
         },
         "sections": {
           "advanced": {

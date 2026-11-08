@@ -19,6 +19,7 @@ from homeassistant.helpers import selector
 
 from .const import (
     CONF_AUTO_TUNE,
+    CONF_HEATS_ROOMS,
     CONF_KI,
     CONF_KP,
     CONF_NIGHT_ENTITY,
@@ -86,6 +87,10 @@ def _room_schema(defaults: dict[str, Any]) -> dict:
         ),
         vol.Required(CONF_PREHEAT, default=defaults.get(CONF_PREHEAT, DEFAULT_PREHEAT)):
             selector.BooleanSelector(),
+        vol.Optional(CONF_HEATS_ROOMS, default=defaults.get(CONF_HEATS_ROOMS) or []):
+            selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="climate", integration=DOMAIN, multiple=True)
+            ),
         vol.Required(ADVANCED): section(
             vol.Schema(
                 {

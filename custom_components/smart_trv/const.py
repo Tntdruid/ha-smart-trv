@@ -14,6 +14,7 @@ CONF_OUTDOOR_SENSOR = "outdoor_sensor"
 CONF_OUTDOOR_GAIN = "outdoor_gain"  # TRV °C per °C between room target and outdoors
 CONF_AUTO_TUNE = "auto_tune"
 CONF_PREHEAT = "preheat"
+CONF_HEATS_ROOMS = "heats_rooms"  # other Smart TRV rooms this room's wood stove warms
 
 DEFAULT_NAME = "Smart TRV"
 DEFAULT_KP = 3.0  # °C extra TRV setpoint per °C room error
