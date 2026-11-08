@@ -106,6 +106,14 @@ SPIKE_WINDOW = timedelta(minutes=15)
 SPIKE_RISE = 0.6
 SPIKE_PAUSE = timedelta(minutes=60)
 HUMIDITY_RISE = 8.0  # %-points within SPIKE_WINDOW: someone is showering
+# A wood stove or similar: after a spike the room stays warmer than the day target for hours.
+# Nothing learned until it has cooled back says anything about the radiator.
+HEAT_SOURCE_ABOVE = 0.5  # °C above the day target...
+HEAT_SOURCE_RISE = 1.0  # ...and this much warmer than before the sudden heat...
+HEAT_SOURCE_LASTS = timedelta(minutes=45)  # ...this long after it began: a shower has faded by then
+HEAT_SOURCE_END = 0.2  # °C above the day target: the extra heat is gone...
+HEAT_SOURCE_SETTLE = timedelta(minutes=30)  # ...once it has stayed there this long
+HEAT_SOURCE_MAX = timedelta(hours=24)  # since the last sudden heat: never pause learning for good
 
 ATTR_DAY_TEMPERATURE = "day_temperature"
 ATTR_NIGHT_ACTIVE = "night_active"
@@ -116,6 +124,7 @@ ATTR_PREHEAT_LEAD = "preheat_lead_minutes"  # radiator warm-up before the room s
 ATTR_PREHEAT_FACTOR = "preheat_factor"
 ATTR_PREHEAT_LEARNING = "preheat_learning"
 ATTR_LAST_PREHEAT = "last_preheat"
+ATTR_HEAT_SOURCE = "heat_source"
 PREHEAT_REACHED = 0.1  # °C below the target counts as warm
 ATTR_KP = "kp"
 ATTR_KI = "ki"
@@ -198,6 +207,10 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
         self._humidity_history: deque[tuple[datetime, float]] = deque()
         self._humidity_sensor: str | None = None  # found on the room sensor's device
         self._spike_until: datetime | None = None
+        self._humidity_until: datetime | None = None  # a shower, not a stove
+        self._spike_start: tuple[datetime, float] | None = None  # when it began, room before it
+        self._heat_source_seen: datetime | None = None  # last sudden heat from a heat source
+        self._heat_source_gone: datetime | None = None  # back near the target since
         # TRVs still reporting another setpoint than we sent, after a resend: trv -> (sent, reported)
         self._rejected: dict[str, tuple[float, float]] = {}
 
@@ -260,6 +273,8 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
             if (factor := last.attributes.get(ATTR_PREHEAT_FACTOR)) is not None:
                 self._preheat_timing.factor = float(factor)
             self._last_preheat = last.attributes.get(ATTR_LAST_PREHEAT)
+            if last.attributes.get(ATTR_HEAT_SOURCE):
+                self._heat_source_seen = dt_util.utcnow()  # a restart doesn't put the stove out
             # Keep tuned gains only while the configured ones are unchanged.
             if (
                 self._tuner is not None
@@ -560,6 +575,7 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
             "error": round(self._pi.error, 2),
             "p_term": round(self._pi.kp * self._pi.error, 2),
             "integral": round(self._pi.integral, 2),
+            "heat_source": self._heat_source_seen is not None,
             # What preheat has learned (diagnostic sensors).
             "preheat_lead": round(self._heat_rate.dead_time * 60),
             "heat_rate": round(self._preheat_rate(), 2),
@@ -574,7 +590,7 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
             "problems": self._problems,
             "learning_paused_until": (
                 dt_util.as_local(self._spike_until).strftime("%H:%M")
-                if self._learning_paused(dt_util.utcnow())
+                if self._spike_until is not None and self._learning_paused(dt_util.utcnow())
                 else None
             ),
             "closed_hours": (
@@ -707,7 +723,40 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
         if room - min(r for _, r in self._room_history) >= SPIKE_RISE - 1e-6:
             if not self._learning_paused(now):
                 _LOGGER.info("%s: sudden heat, pausing learning", self.entity_id)
+            if self._spike_start is None:
+                self._spike_start = (now, min(r for _, r in self._room_history))
             self._spike_until = now + SPIKE_PAUSE
+            if self._heat_source_seen is not None:
+                self._heat_source_seen = now  # still getting warmer: still burning
+        self._follow_heat_source(now, room)
+
+    def _follow_heat_source(self, now: datetime, room: float) -> None:
+        """Tell a wood stove from a shower: it leaves the room well above the target for hours."""
+        reference = max(self._goal(), self._day_target)
+        if self._spike_until is None or now >= self._spike_until:
+            self._spike_start = None
+        if self._heat_source_seen is None:
+            shower = self._humidity_until is not None and now < self._humidity_until
+            if (
+                self._spike_start is not None
+                and not shower
+                and now - self._spike_start[0] >= HEAT_SOURCE_LASTS
+                and room >= reference + HEAT_SOURCE_ABOVE - 1e-6
+                and room >= self._spike_start[1] + HEAT_SOURCE_RISE - 1e-6
+            ):
+                _LOGGER.info("%s: extra heat source, pausing learning until it is gone", self.entity_id)
+                self._heat_source_seen = now
+                self._heat_source_gone = None
+            return
+        if room > reference + HEAT_SOURCE_END + 1e-6:
+            self._heat_source_gone = None
+        elif self._heat_source_gone is None:
+            self._heat_source_gone = now
+        if (
+            self._heat_source_gone is not None and now - self._heat_source_gone >= HEAT_SOURCE_SETTLE
+        ) or now - self._heat_source_seen >= HEAT_SOURCE_MAX:
+            _LOGGER.info("%s: extra heat is gone, learning again", self.entity_id)
+            self._heat_source_seen = self._heat_source_gone = None
 
     def _check_humidity(self, now: datetime, humidity: float | None) -> None:
         """A fast humidity rise is a shower, even before the room has warmed."""
@@ -720,6 +769,7 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
             if not self._learning_paused(now):
                 _LOGGER.info("%s: humidity jump (shower?), pausing learning", self.entity_id)
             self._spike_until = now + SPIKE_PAUSE
+            self._humidity_until = now + SPIKE_PAUSE
             self._publish()
 
     def _find_humidity_sensor(self) -> None:
@@ -735,7 +785,9 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
                 return
 
     def _learning_paused(self, now: datetime) -> bool:
-        return self._spike_until is not None and now < self._spike_until
+        return self._heat_source_seen is not None or (
+            self._spike_until is not None and now < self._spike_until
+        )
 
     def _learn(self, now: datetime, room: float, target: float, dt_hours: float) -> None:
         paused = self._learning_paused(now)
@@ -933,6 +985,7 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
             ATTR_PREHEAT_FACTOR: self._preheat_timing.factor,
             ATTR_PREHEAT_LEARNING: self._heat_rate.to_dict(),
             ATTR_LAST_PREHEAT: self._last_preheat,
+            ATTR_HEAT_SOURCE: self._heat_source_seen is not None,
             ATTR_KP: self._pi.kp,
             ATTR_KI: self._pi.ki,
             ATTR_TUNED_FROM: self._opt_gains,

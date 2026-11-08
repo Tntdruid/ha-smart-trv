@@ -124,3 +124,107 @@ async def test_humidity_jump_on_the_room_sensor_device(hass: HomeAssistant, trv_
         hass.states.async_set("sensor.stue_fugt", value)
         await hass.async_block_till_done()
     assert explanation(hass).startswith("🚿 Pludselig varme eller fugt")
+
+
+# ----------------------------------------------------------------- wood stove
+
+
+async def light_stove(hass, freezer) -> float:
+    """From 20.5 to 25 °C in an hour (day target 20.5), like the living room on 8 Nov."""
+    room = 20.5
+    for _ in range(12):
+        room += 0.375
+        hass.states.async_set(ROOM, str(room))
+        await tick(hass, freezer)
+    return room
+
+
+async def cool_to(hass, freezer, start: float, end: float, hours: float) -> None:
+    steps = int(hours * 12)
+    for k in range(1, steps + 1):
+        hass.states.async_set(ROOM, str(round(start + (end - start) * k / steps, 2)))
+        await tick(hass, freezer)
+
+
+def heat_source(hass) -> bool:
+    return hass.states.get("binary_sensor.stue_heat_source").state == "on"
+
+
+async def test_stove_pauses_learning_all_the_way_down(hass: HomeAssistant, trv_calls, freezer) -> None:  # noqa: F811
+    await setup_room(hass, room=20.5, trv=20.0, integral=1.2)
+    assert not heat_source(hass)
+    room = await light_stove(hass, freezer)
+    assert heat_source(hass)
+    text = explanation(hass)
+    assert text.startswith("🔥 Ekstra varmekilde (fx brændeovn)") and "🚿" not in text
+    integral = hass.states.get(ENTITY).attributes["pi_integral"]
+
+    # 8 hours cooling down: far past the old 60 min pause.
+    await cool_to(hass, freezer, room, 20.8, 8)
+    assert heat_source(hass)
+    assert hass.states.get(ENTITY).attributes["pi_integral"] == integral
+
+    # Back at the target and staying there: learning again.
+    await cool_to(hass, freezer, 20.8, 20.6, 1)
+    assert not heat_source(hass)
+    assert "🔥" not in explanation(hass)
+
+
+async def test_shower_is_not_a_stove(hass: HomeAssistant, trv_calls, freezer) -> None:  # noqa: F811
+    esp = MockConfigEntry(domain="esphome")
+    esp.add_to_hass(hass)
+    device = dr.async_get(hass).async_get_or_create(
+        config_entry_id=esp.entry_id, identifiers={("esphome", "sht4x")}
+    )
+    reg = er.async_get(hass)
+    reg.async_get_or_create(
+        "sensor", "esphome", "t", device_id=device.id, suggested_object_id="stue_temperatur"
+    )
+    reg.async_get_or_create(
+        "sensor", "esphome", "h", device_id=device.id, original_device_class="humidity",
+        suggested_object_id="stue_fugt",
+    )
+    hass.states.async_set("sensor.stue_fugt", "50")
+    await setup_room(hass, room=20.5, trv=20.0)
+    await tick(hass, freezer)
+    hass.states.async_set("sensor.stue_fugt", "75")
+    hass.states.async_set(ROOM, "21.3")  # 0.8 above the target, but humid
+    await tick(hass, freezer)
+    assert not heat_source(hass)
+    assert "🚿" in explanation(hass)
+
+
+async def test_sudden_heat_below_the_target_is_not_a_stove(hass: HomeAssistant, trv_calls, freezer) -> None:  # noqa: F811
+    await setup_room(hass, room=19.6, trv=20.0)
+    await tick(hass, freezer)
+    hass.states.async_set(ROOM, "20.3")
+    await tick(hass, freezer)
+    assert not heat_source(hass)
+
+
+async def test_heat_source_survives_restart(hass: HomeAssistant, trv_calls, freezer) -> None:  # noqa: F811
+    mock_restore_cache(hass, [State(ENTITY, "heat", {
+        "day_temperature": 20.5, "pi_integral": 1.2, "heat_source": True,
+    })])
+    hass.states.async_set(ROOM, "24.0")
+    hass.states.async_set("binary_sensor.stue_vindue", "off")
+    set_trv(hass, local=20.0, setpoint=21.5)
+    entry = MockConfigEntry(domain="smart_trv", data=USER_INPUT)
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    await tick(hass, freezer)
+    assert heat_source(hass)
+
+
+async def test_shower_without_humidity_sensor_fades_and_is_not_a_stove(
+    hass: HomeAssistant, trv_calls, freezer  # noqa: F811
+) -> None:
+    await setup_room(hass, room=20.5, trv=20.0)
+    await tick(hass, freezer)
+    for room in ("20.8", "21.1", "21.4"):  # 0.9 warmer, then it stays there
+        hass.states.async_set(ROOM, room)
+        await tick(hass, freezer)
+    for _ in range(14):
+        await tick(hass, freezer)
+    assert not heat_source(hass)

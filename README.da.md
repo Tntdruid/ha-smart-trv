@@ -169,6 +169,12 @@ Har Smart TRV bedt TRV'en lukke i over 2 timer, men måler TRV'en stadig mindst 
 
 Stiger rumtemperaturen 0,6 °C eller mere på 15 minutter, eller fugten 8 procentpoint eller mere, er det et bad, madlavning eller lignende og ikke radiatoren. Så holder Smart TRV læringen på pause i 60 minutter, så et bad ikke trækker det lærte offset ned. Reguleringen kører videre som normalt imens. Fugtsensoren findes automatisk på samme enhed som rumsensoren (fx en SHT4x). Forklaringen viser "🚿 … læringen holder pause til kl. 08:15".
 
+## Brændeovn og andre varmekilder
+
+Er pludselig varme der stadig 45 minutter senere, og er rummet mindst 1 °C varmere end før og 0,5 °C over dagtemperaturen, regner Smart TRV det som en ekstra varmekilde, fx en brændeovn. TRV'erne forbliver bare lukkede som altid, men al læring (offset, tuning og forvarmning) holder pause, til rummet er tilbage inden for 0,2 °C af dagtemperaturen og har ligget der i 30 minutter, uanset hvor mange timer det tager (højst 24 timer efter den seneste pludselige varme). Stiger fugten, er det et bad og ikke en brændeovn.
+
+I forklaringen står der "🔥 Ekstra varmekilde", og `binary_sensor.<rum>_heat_source` er tændt imens, så du kan bruge den i en automation.
+
 ## Automatisk tuning
 
 En gang i døgnet ser Smart TRV på, hvordan rummet har opført sig, når det regulerer roligt. Opstarten om morgenen, udluftning og helt åben ventil tæller ikke med.

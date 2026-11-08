@@ -166,6 +166,12 @@ If Smart TRV has told the TRV to close for more than 2 hours, but the TRV still 
 
 If the room temperature rises 0.6 °C or more within 15 minutes, or humidity 8 percentage points or more, it's a shower, cooking or similar, not the radiator. Smart TRV then pauses learning for 60 minutes so a shower doesn't drag the learned offset down; control carries on as normal. The humidity sensor is found automatically on the same device as the room sensor (e.g. an SHT4x). The explanation shows "🚿 … learning paused until 08:15".
 
+## Wood stove and other heat sources
+
+If sudden heat is still there 45 minutes later, with the room at least 1 °C warmer than before and 0.5 °C above the day target, Smart TRV treats it as an extra heat source such as a wood stove. The TRVs simply stay closed as usual, but all learning (offset, tuning, preheat) pauses until the room is back within 0.2 °C of the day target and has stayed there for 30 minutes, however many hours that takes (24 hours at most since the last sudden heat). A rise in humidity means a shower, not a stove.
+
+The explanation shows "🔥 Extra heat source", and `binary_sensor.<room>_heat_source` is on meanwhile, so you can use it in an automation.
+
 ## Auto-tuning
 
 Once a day Smart TRV looks at how the room behaved while regulating calmly. Morning warm-up, airing and a fully open valve don't count.

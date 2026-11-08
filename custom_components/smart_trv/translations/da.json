@@ -140,6 +140,9 @@
     "binary_sensor": {
       "problem": {
         "name": "TRV-problem"
+      },
+      "heat_source": {
+        "name": "Ekstra varmekilde"
       }
     }
   }
