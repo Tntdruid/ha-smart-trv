@@ -47,7 +47,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         from homeassistant.components.frontend import add_extra_js_url
 
         # The file's mtime busts the browser cache whenever the card is updated.
-        add_extra_js_url(hass, f"{CARD_URL}?v={int(CARD_FILE.stat().st_mtime)}")
+        stat = await hass.async_add_executor_job(CARD_FILE.stat)
+        add_extra_js_url(hass, f"{CARD_URL}?v={int(stat.st_mtime)}")
     else:
         _LOGGER.debug("frontend not loaded; Smart TRV card served at %s but not auto-loaded", CARD_URL)
     return True
