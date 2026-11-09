@@ -42,10 +42,9 @@ Tager en TRV ikke imod det setpunkt, Smart TRV sender (den viser stadig noget an
 
 **Med HACS eller Marketplace (anbefalet):** I Home Assistant 2026.11+ ligger HACS indbygget under **Indstillinger → Marketplace**.
 
-1. HACS/Marketplace → ⋮ → **Brugerdefinerede repositories** → tilføj `https://github.com/Tntdruid/ha-smart-trv`, kategori **Integration**. (Når Smart TRV er optaget i det officielle katalog, kan du springe dette trin over og bare søge.)
-2. Søg efter **Smart TRV (PI)** → **Download**.
-3. Genstart Home Assistant.
-4. **Indstillinger → Enheder og tjenester → Tilføj integration → "Smart TRV (PI)"**.
+1. Åbn HACS/Marketplace, søg efter **Smart TRV (PI)** → **Download**.
+2. Genstart Home Assistant.
+3. **Indstillinger → Enheder og tjenester → Tilføj integration → "Smart TRV (PI)"**.
 
 HACS giver besked, når der kommer en ny version.
 

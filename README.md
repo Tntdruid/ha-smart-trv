@@ -42,10 +42,9 @@ If a TRV doesn't accept the setpoint Smart TRV sends (it still shows a lower val
 
 **With HACS or the Marketplace (recommended):** In Home Assistant 2026.11+ HACS is built in under **Settings → Marketplace**.
 
-1. HACS/Marketplace → ⋮ → **Custom repositories** → add `https://github.com/Tntdruid/ha-smart-trv`, category **Integration**. (Once Smart TRV is in the official catalog you can skip this and just search.)
-2. Search for **Smart TRV (PI)** → **Download**.
-3. Restart Home Assistant.
-4. **Settings → Devices & services → Add integration → "Smart TRV (PI)"**.
+1. Open HACS/Marketplace, search for **Smart TRV (PI)** → **Download**.
+2. Restart Home Assistant.
+3. **Settings → Devices & services → Add integration → "Smart TRV (PI)"**.
 
 HACS tells you when a new version is out.
 
