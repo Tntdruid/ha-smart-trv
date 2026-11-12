@@ -11,6 +11,7 @@ from homeassistant.components.climate import (
     ATTR_CURRENT_TEMPERATURE,
     ATTR_HVAC_ACTION,
     ATTR_HVAC_MODES,
+    ATTR_MAX_TEMP,
     ATTR_MIN_TEMP,
     ATTR_PRESET_MODE,
     ATTR_PRESET_MODES,
@@ -60,6 +61,10 @@ from .const import (
     CONF_OUTDOOR_GAIN,
     CONF_OUTDOOR_SENSOR,
     CONF_PREHEAT,
+    CONF_PRESENCE,
+    CONF_RETURN_TIME,
+    CONF_SUMMER,
+    CONF_SUN,
     CONF_NIGHT_ENTITY,
     CONF_ROOM_SENSOR,
     CONF_TRVS,
@@ -75,6 +80,8 @@ from .const import (
     DEFAULT_MAX_CUT,
     DEFAULT_OUTDOOR_GAIN,
     DEFAULT_PREHEAT,
+    DEFAULT_SUMMER,
+    DEFAULT_SUN,
     DEFAULT_TRV_STEP,
     DEFAULT_WINDOW_CLOSE_DELAY,
     DEFAULT_WINDOW_OPEN_DELAY,
@@ -92,7 +99,15 @@ from .const import (
     TRV_MIN_TEMP,
 )
 from .controller import PIController
-from .learning import MAX_PREHEAT_HOURS, AutoTuner, HeatRateLearner, PreheatTiming, preheat_hours
+from .learning import (
+    MAX_PREHEAT_HOURS,
+    SUN_LEAD_HOURS,
+    AutoTuner,
+    HeatRateLearner,
+    PreheatTiming,
+    SunProfile,
+    preheat_hours,
+)
 from .diagnostics_text import explain, language, preheat_text, problem_text
 
 _LOGGER = logging.getLogger(__name__)
@@ -115,6 +130,18 @@ HEAT_SOURCE_LASTS = timedelta(minutes=45)  # ...this long after it began: a show
 HEAT_SOURCE_END = 0.2  # °C above the day target: the extra heat is gone...
 HEAT_SOURCE_SETTLE = timedelta(minutes=30)  # ...once it has stayed there this long
 HEAT_SOURCE_MAX = timedelta(hours=24)  # since the last sudden heat: never pause learning for good
+# Away and holiday.
+AWAY_DELAY = timedelta(minutes=30)  # a trip to the shop doesn't lower the heating
+RETURN_GRACE = timedelta(hours=12)  # after the holiday return time, expect someone home
+# Summer: heating off once it has been warm outside for a day, on again when it cools.
+SUMMER_ON = 16.0  # °C, 24 h average outdoors...
+SUMMER_HOLD = timedelta(hours=24)  # ...for this long
+SUMMER_OFF = 14.0  # °C, 24 h average: the heating season is back
+EXERCISE_EVERY = timedelta(days=7)  # open and close each valve so it doesn't seize
+EXERCISE_FOR = timedelta(minutes=10)
+EXERCISE_HOURS = (10, 16)  # local time, while someone may hear it rather than at night
+# Sun: how sunny it is, from the weather entity's condition.
+SUN_CONDITIONS = {"sunny": 1.0, "partlycloudy": 0.5}
 
 ATTR_DAY_TEMPERATURE = "day_temperature"
 ATTR_NIGHT_ACTIVE = "night_active"
@@ -133,6 +160,22 @@ ATTR_KI = "ki"
 ATTR_TUNED_FROM = "tuned_from"  # the configured Kp/Ki the tuned values started from
 ATTR_LAST_TUNING = "last_tuning"
 ATTR_OUTDOOR_FF = "outdoor_ff"
+ATTR_AWAY = "away"
+ATTR_SUMMER = "summer"
+ATTR_OUTDOOR_AVG = "outdoor_24h"
+ATTR_WARM_SINCE = "warm_since"
+ATTR_LAST_EXERCISE = "last_valve_exercise"
+ATTR_SUN_PROFILE = "sun_profile"
+ATTR_SUN_REDUCTION = "sun_reduction"
+ATTR_HEATING_TODAY = "heating_hours_today"
+ATTR_HEATING_TOTAL = "heating_hours_total"
+ATTR_HEATING_DAY = "heating_day"
+
+
+def _parse_time(value: Any) -> datetime | None:
+    if isinstance(value, str):
+        value = dt_util.parse_datetime(value)
+    return value if isinstance(value, datetime) else None
 
 
 async def async_setup_entry(
@@ -235,6 +278,30 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
         self._preheat_run: dict[str, Any] | None = None
         self._last_preheat: str | None = None
 
+        # Away and holiday: nobody home lowers the room; a known return time is preheated for.
+        self._presence: str | None = conf.get(CONF_PRESENCE)
+        self._return_entity: str | None = conf.get(CONF_RETURN_TIME)
+        # Summer: off while it's warm outside, with a weekly valve exercise. Needs outdoors.
+        self._summer_enabled = bool(conf.get(CONF_SUMMER, DEFAULT_SUMMER)) and bool(self._outdoor_sensor)
+        self._summer = False
+        self._outdoor_avg: float | None = None  # 24 h average
+        self._summer_clock: datetime | None = None
+        self._warm_since: datetime | None = None
+        self._last_exercise: datetime | None = None
+        self._exercise_until: datetime | None = None
+        # Sun: learned per hour of the day, used when the weather says it's sunny.
+        self._sun_enabled = bool(conf.get(CONF_SUN, DEFAULT_SUN))
+        self._sun = SunProfile()
+        self._sun_ff = 0.0
+        # What each control step did about the sun: (time, how sunny, TRV already shut).
+        self._sun_history: deque[tuple[datetime, float, bool]] = deque()
+        # Heating time, to compare rooms and days.
+        self._heating_today = 0.0
+        self._heating_total = 0.0
+        self._heating_day: str | None = None
+        self._heating_clock: datetime | None = None
+        self._was_heating = False
+
         # Auto-tuning starts from the configured Kp/Ki and nudges them once a day.
         self._opt_gains = [self._pi.kp, self._pi.ki]
         self._tuner = (
@@ -281,6 +348,16 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
                 self._heat_source_seen = dt_util.utcnow()  # a restart doesn't put the stove out
             if last.attributes.get(ATTR_HEAT_FROM_ROOM):
                 self._room_heat_seen = dt_util.utcnow()
+            attrs = last.attributes
+            self._summer = bool(attrs.get(ATTR_SUMMER))
+            if isinstance(attrs.get(ATTR_OUTDOOR_AVG), (int, float)):
+                self._outdoor_avg = float(attrs[ATTR_OUTDOOR_AVG])
+            self._warm_since = _parse_time(attrs.get(ATTR_WARM_SINCE))
+            self._last_exercise = _parse_time(attrs.get(ATTR_LAST_EXERCISE))
+            self._sun.load(attrs.get(ATTR_SUN_PROFILE))
+            self._heating_total = float(attrs.get(ATTR_HEATING_TOTAL) or 0.0)
+            self._heating_today = float(attrs.get(ATTR_HEATING_TODAY) or 0.0)
+            self._heating_day = attrs.get(ATTR_HEATING_DAY)
             # Keep tuned gains only while the configured ones are unchanged.
             if (
                 self._tuner is not None
@@ -304,7 +381,10 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
                 [
                     self._room_sensor,
                     *self._windows,
-                    *filter(None, [self._night_entity, self._humidity_sensor]),
+                    *filter(
+                        None,
+                        [self._night_entity, self._humidity_sensor, self._presence, self._return_entity],
+                    ),
                 ],
                 self._async_input_changed,
             )
@@ -344,7 +424,7 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
         if event.data["entity_id"] in self._windows:
             self._async_window_changed()
             return
-        self.hass.async_create_task(self._async_control())  # night changed: act now
+        self.hass.async_create_task(self._async_control())  # night, presence or return: act now
 
     @callback
     def _async_window_changed(self) -> None:
@@ -400,7 +480,13 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
         now = dt_util.utcnow()
         room = self._room_temp
 
-        if self._attr_hvac_mode == HVACMode.OFF or self._window_open:
+        self._count_heating(now)
+        self._update_summer(now)
+        if self._exercise_due(now):
+            await self._async_exercise(now)
+            self._publish()
+            return
+        if self._attr_hvac_mode == HVACMode.OFF or self._window_open or self._summer:
             self._last_run = now  # freeze the integral while not heating
             self._full_open_since = None
             self._closed_since = None
@@ -435,12 +521,18 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
             self._pi.integral -= self._ff  # it already contained this load; avoid a jump
             self._ff_migrated = True
 
+        sun = self._sunshine() if self._lowered is None and self._preheat_for is None else 0.0
+        self._sun_ff = self._sun.reduction(self._local_hour(now), sun)
         self._trv_setpoint = self._pi.update(
-            target, room, dt_hours, self._average_trv_temperature(), self._ff,
+            target, room, dt_hours, self._average_trv_temperature(), self._ff - self._sun_ff,
             self._valve_position(),
-            learn=not self._learning_paused(now),
+            # Overshoot in the sun is for the sun profile to learn, not the radiator offset.
+            learn=not self._learning_paused(now) and not (sun > 0 and room > target),
         )
         self._learn(now, room, target, dt_hours)
+        self._sun_history.append((now, sun, self._pi.valve_saturated and self._pi.error < 0))
+        while now - self._sun_history[0][0] > timedelta(hours=SUN_LEAD_HOURS + 0.5):
+            self._sun_history.popleft()
         # Track how long the TRV has been asked for full heat, and what it read then: a radiator
         # that warms makes the TRV's reading rise, wherever it sits (even in cold air by a window).
         if self._pi.valve_saturated and self._pi.error > 0:
@@ -543,7 +635,7 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
 
     def _diagnostics(self) -> dict[str, Any]:
         trv_temp = self._average_trv_temperature()
-        if self._attr_hvac_mode == HVACMode.OFF:
+        if self._attr_hvac_mode == HVACMode.OFF or (self._summer and self._exercise_until is None):
             status = STATUS_OFF
         elif self._window_open:
             status = STATUS_WINDOW
@@ -589,9 +681,19 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
             "preheat_factor": round(self._preheat_timing.factor, 2),
             "last_preheat": self._last_preheat,
             "night_active": self._night_active,
-            "preheat_until": (
-                dt_util.as_local(self._preheat_for).strftime("%H:%M") if self._preheat_for else None
+            "preheat_until": self._fmt_time(self._preheat_for) if self._preheat_for else None,
+            "preheat_home": self._preheat_for is not None and self._lowered == "holiday",
+            "away": self._away_active,
+            "holiday_until": (
+                self._fmt_time(self._return_time())
+                if self._away_active and self._lowered == "holiday"
+                else None
             ),
+            "summer": self._summer,
+            "exercising": self._exercise_until is not None,
+            "sun_reduction": self._sun_ff,
+            "heating_today": round(self._heating_today, 2),
+            "heating_total": round(self._heating_total, 2),
             "day_target": self._day_target,
             "outdoor_ff": self._ff,
             "problems": self._problems,
@@ -633,7 +735,153 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
     @property
     def _night_active(self) -> bool:
         """Night temperature in use: night scheduled and not preheating for the morning."""
-        return self._night_scheduled and self._preheat_for is None
+        return self._lowered == "night" and self._preheat_for is None
+
+    @property
+    def _away_active(self) -> bool:
+        """Away temperature in use: nobody home, and not preheating for the return."""
+        return self._lowered in ("away", "holiday") and self._preheat_for is None
+
+    @property
+    def _lowered(self) -> str | None:
+        """Why the room is lowered, ignoring preheat: "holiday", "away", "night" or None."""
+        if (away := self._away_state(dt_util.utcnow())) is not None:
+            return away
+        return "night" if self._night_scheduled else None
+
+    def _comfort_at(self) -> datetime | None:
+        """When the lowered period ends, if known: what preheat aims for."""
+        lowered = self._lowered
+        if lowered == "holiday":
+            return self._return_time()
+        if lowered == "night":
+            return self._night_end()
+        return None
+
+    def _someone_home(self) -> bool:
+        if self._presence is None or (s := self.hass.states.get(self._presence)) is None:
+            return True
+        if s.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+            return True  # don't let the house go cold on a sensor hiccup
+        if self._presence.startswith("zone."):
+            try:
+                return float(s.state) > 0  # zone.home counts the people at home
+            except ValueError:
+                return True
+        return s.state in ("home", STATE_ON)
+
+    def _return_time(self) -> datetime | None:
+        """Back home from a holiday, from an input_datetime (local time)."""
+        if self._return_entity is None or (s := self.hass.states.get(self._return_entity)) is None:
+            return None
+        when = dt_util.parse_datetime(s.state)
+        if when is None:
+            return None
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=dt_util.get_default_time_zone())
+        return dt_util.as_utc(when)
+
+    def _away_state(self, now: datetime) -> str | None:
+        """"holiday" (away, return time ahead), "away", or None while someone is home."""
+        if self._presence is None or self._someone_home():
+            return None
+        state = self.hass.states.get(self._presence)
+        if state is None or now - state.last_changed < AWAY_DELAY:
+            return None
+        back = self._return_time()
+        if back is not None and now >= back:
+            if now - back < RETURN_GRACE:
+                return None  # expected home any moment: keep it warm
+            back = None  # an old return time
+        return "holiday" if back is not None else "away"
+
+    def _fmt_time(self, when: datetime | None) -> str | None:
+        if when is None:
+            return None
+        local = dt_util.as_local(when)
+        if local.date() == dt_util.as_local(dt_util.utcnow()).date():
+            return local.strftime("%H:%M")
+        return local.strftime("%d/%m %H:%M")
+
+    @staticmethod
+    def _local_hour(now: datetime) -> float:
+        local = dt_util.as_local(now)
+        return local.hour + local.minute / 60
+
+    def _sunshine(self) -> float:
+        """0-1 from the weather now (sunny 1, partly cloudy 0.5), only with the sun up."""
+        if not self._sun_enabled:
+            return 0.0
+        if (sun := self.hass.states.get("sun.sun")) is not None and sun.state != "above_horizon":
+            return 0.0
+        weather = sorted(self.hass.states.async_all("weather"), key=lambda s: s.entity_id)
+        return SUN_CONDITIONS.get(weather[0].state, 0.0) if weather else 0.0
+
+    def _update_summer(self, now: datetime) -> None:
+        """Summer once the 24 h outdoor average has stayed over 16 °C for a day; off under 14 °C."""
+        if not self._summer_enabled:
+            self._summer = False
+            return
+        if (outdoor := self._outdoor()) is None:
+            return
+        if self._outdoor_avg is None:
+            self._outdoor_avg = outdoor
+        elif self._summer_clock is not None:
+            hours = min((now - self._summer_clock).total_seconds() / 3600, 1.0)
+            self._outdoor_avg += (outdoor - self._outdoor_avg) * hours / 24
+        self._summer_clock = now
+        if self._outdoor_avg >= SUMMER_ON:
+            self._warm_since = self._warm_since or now
+            if not self._summer and now - self._warm_since >= SUMMER_HOLD:
+                self._summer = True
+                _LOGGER.info("%s: summer, heating off", self.entity_id)
+        else:
+            self._warm_since = None
+        if self._summer and self._outdoor_avg < SUMMER_OFF:
+            self._summer = False
+            _LOGGER.info("%s: heating season again", self.entity_id)
+
+    def _exercise_due(self, now: datetime) -> bool:
+        """Weekly in summer: open each valve for a few minutes so it doesn't seize."""
+        if self._exercise_until is not None:
+            if now < self._exercise_until:
+                return True
+            self._exercise_until = None
+            self._trvs_off = False  # close them again
+            return False
+        if (
+            not self._summer
+            or self._window_open
+            or self._attr_hvac_mode == HVACMode.OFF
+            or not EXERCISE_HOURS[0] <= dt_util.as_local(now).hour < EXERCISE_HOURS[1]
+            or (self._last_exercise is not None and now - self._last_exercise < EXERCISE_EVERY)
+        ):
+            return False
+        self._last_exercise = now
+        self._exercise_until = now + EXERCISE_FOR
+        _LOGGER.info("%s: exercising the valves", self.entity_id)
+        return True
+
+    async def _async_exercise(self, now: datetime) -> None:
+        highest = [
+            float(m)
+            for trv in self._trvs
+            if (s := self.hass.states.get(trv)) is not None
+            and (m := s.attributes.get(ATTR_MAX_TEMP)) is not None
+        ]
+        await self._async_push_to_trvs(min([TRV_MAX_TEMP, *highest]), now)
+
+    def _count_heating(self, now: datetime) -> None:
+        """Add up the time the room heats, today (reset at midnight) and in total."""
+        today = dt_util.as_local(now).date().isoformat()
+        if self._heating_day != today:
+            self._heating_day, self._heating_today = today, 0.0
+        if self._was_heating and self._heating_clock is not None:
+            hours = min((now - self._heating_clock).total_seconds() / 3600, MAX_DT_HOURS)
+            self._heating_today += hours
+            self._heating_total += hours
+        self._heating_clock = now
+        self._was_heating = self.hvac_action == HVACAction.HEATING
 
     def _night_end(self) -> datetime | None:
         """When the night ends, if the night entity says (a schedule has next_event)."""
@@ -683,8 +931,8 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
 
     def _update_preheat(self, now: datetime) -> None:
         self._follow_preheat(now)
-        nxt = self._night_end()
-        if not (self._preheat_enabled and self._night_scheduled) or nxt is None or now >= nxt:
+        nxt = self._comfort_at()
+        if not self._preheat_enabled or nxt is None or now >= nxt:
             self._preheat_for = None
             return
         if self._preheat_for == nxt:
@@ -846,6 +1094,19 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
             if (change := self._tuner.observe(self._pi.error, dt_hours, steady)) is not None:
                 self._pi.kp, self._pi.ki = self._tuner.kp, self._tuner.ki
                 _LOGGER.info("%s: auto-tuning: %s", self.entity_id, change)
+        if (
+            dt_hours > 0
+            and not paused
+            and self._lowered is None
+            and self._preheat_for is None
+            and target == self._last_target
+        ):
+            # The reduction showing now was chosen SUN_LEAD_HOURS ago: learn from that step.
+            lead = timedelta(hours=SUN_LEAD_HOURS)
+            then = [h for h in self._sun_history if now - h[0] >= lead - timedelta(minutes=1)]
+            if then:
+                _, sun_then, shut_then = then[-1]
+                self._sun.learn(self._local_hour(now), room - target, sun_then, dt_hours, not shut_then)
         self._last_target = target
 
     def _find_battery_entities(self) -> None:
@@ -956,9 +1217,15 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
     # ------------------------------------------------------------ entity API
 
     def _goal(self) -> float:
-        """The goal right now: the night temperature while the night entity is on."""
+        """The goal right now: away, night or day temperature."""
+        data = self._entry.runtime_data
+        if self._away_active:
+            temp = data.away_temperature
+            if self._night_scheduled:
+                temp = min(temp, data.night_temperature)
+            return min(temp, self._day_target)
         if self._night_active:
-            return self._entry.runtime_data.night_temperature
+            return data.night_temperature
         return self._day_target
 
     # HA 2026.11 renamed the temperature members to native_* and will drop the old names in
@@ -987,7 +1254,11 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
 
     @property
     def hvac_action(self) -> HVACAction:
-        if self._attr_hvac_mode == HVACMode.OFF or self._window_open:
+        if (
+            self._attr_hvac_mode == HVACMode.OFF
+            or self._window_open
+            or (self._summer and self._exercise_until is None)
+        ):
             return HVACAction.OFF
         heating = False
         for trv in self._trvs:
@@ -1029,13 +1300,26 @@ class SmartTRVClimate(ClimateEntity, RestoreEntity):
             ATTR_TUNED_FROM: self._opt_gains,
             ATTR_LAST_TUNING: self._tuner.last_change if self._tuner else None,
             ATTR_OUTDOOR_FF: self._ff,
+            ATTR_AWAY: self._away_active,
+            ATTR_SUMMER: self._summer,
+            ATTR_OUTDOOR_AVG: None if self._outdoor_avg is None else round(self._outdoor_avg, 2),
+            ATTR_WARM_SINCE: self._warm_since.isoformat() if self._warm_since else None,
+            ATTR_LAST_EXERCISE: self._last_exercise.isoformat() if self._last_exercise else None,
+            ATTR_SUN_PROFILE: self._sun.bins,
+            ATTR_SUN_REDUCTION: self._sun_ff,
+            ATTR_HEATING_TODAY: round(self._heating_today, 3),
+            ATTR_HEATING_TOTAL: round(self._heating_total, 3),
+            ATTR_HEATING_DAY: self._heating_day,
         }
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
         if (temp := kwargs.get(ATTR_TEMPERATURE)) is None:
             return
         # The thermostat card always shows the current goal, so it changes the current one.
-        if self._night_active:
+        if self._away_active:
+            self._entry.runtime_data.away_temperature = float(temp)
+            async_dispatcher_send(self.hass, SIGNAL_SETTINGS.format(self._entry.entry_id))
+        elif self._night_active:
             self._entry.runtime_data.night_temperature = float(temp)
             async_dispatcher_send(self.hass, SIGNAL_SETTINGS.format(self._entry.entry_id))
         else:

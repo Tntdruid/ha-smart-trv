@@ -5,6 +5,7 @@
 - PreheatTiming: learns from each morning whether the room was warm in time.
 - preheat_hours: how early to start so the room is warm when the night ends.
 - AutoTuner: nudges Kp/Ki once a day from how the room actually behaved.
+- SunProfile: how much to turn down ahead of the sun, per hour of the day.
 """
 
 from __future__ import annotations
@@ -274,3 +275,55 @@ class AutoTuner:
             return None
         self.last_change = f"Rummet {why}: Kp {old[0]} → {self.kp}, Ki {old[1]} → {self.ki}"
         return self.last_change
+
+
+SUN_LEAD_HOURS = 0.5  # turn down this long before the sun's heat shows: the radiator lags
+SUN_RATE = 0.6  # °C of reduction learned per °C·h the room sat over target in the sun
+SUN_MAX = 3.0
+SUN_DEADBAND = 0.1  # °C: closer than this to the target teaches nothing
+
+
+@dataclass
+class SunProfile:
+    """How much to turn the TRV down at each hour of the day when the sun shines.
+
+    Learned from sunny hours, iteratively: if the room still went over target at 15:00, turn
+    down more from 14:00 next sunny day; if it then fell under target, turn down less. It
+    settles where the room stays on target, so it doesn't swing from one day to the next.
+    """
+
+    bins: list[float] = field(default_factory=lambda: [0.0] * 24)
+
+    def _weights(self, hour: float) -> tuple[int, int, float]:
+        hour %= 24
+        low = int(hour) % 24
+        return low, (low + 1) % 24, hour - int(hour)
+
+    def at(self, hour: float) -> float:
+        """The learned reduction for the sun's effect at this local hour (0-24)."""
+        low, high, frac = self._weights(hour)
+        return self.bins[low] * (1 - frac) + self.bins[high] * frac
+
+    def reduction(self, hour: float, sun: float) -> float:
+        """°C to take off the TRV setpoint now, given how sunny it is (0-1)."""
+        return round(sun * self.at(hour + SUN_LEAD_HOURS), 2) if sun > 0 else 0.0
+
+    def learn(
+        self, hour: float, above: float, sun: float, dt_hours: float, can_cut: bool = True
+    ) -> None:
+        """Feed a steady control step: the room is `above` °C over its target now.
+
+        sun and can_cut describe the step SUN_LEAD_HOURS ago, whose reduction shows now: how
+        sunny it was then, and whether the TRV could still be turned down (not already shut).
+        Turning down more than shut teaches nothing, and would only wind the profile up.
+        """
+        if sun <= 0 or dt_hours <= 0 or abs(above) < SUN_DEADBAND or (above > 0 and not can_cut):
+            return
+        step = SUN_RATE * sun * max(-0.5, min(0.5, above)) * dt_hours
+        low, high, frac = self._weights(hour)
+        for idx, weight in ((low, 1 - frac), (high, frac)):
+            self.bins[idx] = round(min(SUN_MAX, max(0.0, self.bins[idx] + step * weight)), 4)
+
+    def load(self, data: object) -> None:
+        if isinstance(data, list) and len(data) == 24:
+            self.bins = [float(v) for v in data]

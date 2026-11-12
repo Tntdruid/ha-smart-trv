@@ -149,6 +149,35 @@ Simulation (`python tests/simulate_preheat.py`) of 5 × 3 weeks with the weather
 | Before (one rate, +20 %) | 8 of 70 | 1.0 °C short | 32 min |
 | Now | 4 of 70 | 0.3 °C short | 15 min |
 
+## Away and holiday
+
+Choose who counts as home under Configure → *Home*, e.g. `zone.home` (the number of people at home) or a person. When nobody has been home for 30 minutes, the room keeps its **Away temperature** (`number.<room>_away_temperature`, 17 °C to start with, set on the device page). It goes back to the normal temperature as soon as someone is home. At night the lower of the away and night temperatures is used.
+
+For a holiday, also choose an `input_datetime` under *Back from holiday* and set it to when you are back. While nobody is home, the room keeps the away temperature and preheats so it is warm when you arrive, using what preheat has learned about the room. If you are late, it stays warm for 12 hours after the return time. The explanation shows "🏠 Nobody home" or "🧳 Holiday".
+
+## Summer
+
+With an outdoor sensor, Smart TRV turns the heating off once the 24-hour average outside has stayed over 16 °C for a day, and turns it on again when the average drops under 14 °C. The TRVs then don't regulate all summer and use less battery. Meanwhile it opens each valve for 10 minutes once a week (between 10 and 16), so it doesn't seize up before autumn. Can be turned off under Configure → *Off in summer*.
+
+## Sun
+
+On sunny days the sun can warm a room past its target, and by then the radiator has already heated. With a weather entity in Home Assistant (e.g. `weather.forecast_home`), Smart TRV learns for each hour of the day how much to turn the TRV down when it is sunny, and does it half an hour ahead. If the room still went over target, it turns down a little more next sunny day. If the room then sat under target, it turns down less. Partly cloudy counts as half. `sensor.<room>_sun_reduction` (diagnostic) shows how much it turns down right now. Can be turned off under Configure → *Learn from the sun*.
+
+In a room model where the sun warms the room from 13 to 17 on sunny days, after two weeks:
+
+| Sun heat | Average deviation 10-20 | Highest | Lowest |
+|---|---|---|---|
+| Moderate, before | 0.10 °C | +0.25 °C | −0.25 °C |
+| Moderate, now | 0.06 °C | +0.13 °C | −0.15 °C |
+| Strong, before | 0.36 °C | +0.78 °C | −0.31 °C |
+| Strong, now | 0.22 °C | +0.55 °C | −0.24 °C |
+
+With strong sun the room still gets warmer than the target: a shut valve can't cool it.
+
+## Heating time
+
+`sensor.<room>_heating_today` shows how many hours the room has heated today (it starts over at midnight), and `sensor.<room>_heating_total` adds up all the time. Home Assistant keeps statistics for both, so a *Statistics graph* card with the "change" stat shows the heating time per day, week or month for each room side by side.
+
 ## Outdoor temperature
 
 Choose an outdoor sensor under Configure. Smart TRV then adds `0.1 × (target − outdoor)` to the TRV setpoint and reacts to cold nights *before* the room cools down; the learned offset handles the rest. In the simulation the swing on a normal day halves (21.75–22.24 → 21.89–22.13 °C). Adding the outdoor sensor to a room that has already learned subtracts the compensation from what it learned, so the setpoint doesn't jump.

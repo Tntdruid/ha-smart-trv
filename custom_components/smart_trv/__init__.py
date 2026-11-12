@@ -31,10 +31,12 @@ class SmartTRVData:
 
     diag: latest controller numbers, written by the climate entity, read by the sensors.
     night_temperature: owned by the number entity, used while the night entity is on.
+    away_temperature: owned by the number entity, used while nobody is home.
     """
 
     diag: dict[str, Any] = field(default_factory=dict)
     night_temperature: float = 19.0
+    away_temperature: float = 17.0
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:

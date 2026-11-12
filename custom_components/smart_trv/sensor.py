@@ -61,6 +61,31 @@ SENSORS = (
     _temp("error"),
     _temp("p_term"),
     _temp("integral"),
+    # How long the room has heated: compare rooms and days (statistics work on the total).
+    SmartTRVSensorDescription(
+        key="heating_today",
+        translation_key="heating_today",
+        native_unit_of_measurement=UnitOfTime.HOURS,
+        device_class=SensorDeviceClass.DURATION,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        suggested_display_precision=1,
+    ),
+    SmartTRVSensorDescription(
+        key="heating_total",
+        translation_key="heating_total",
+        native_unit_of_measurement=UnitOfTime.HOURS,
+        device_class=SensorDeviceClass.DURATION,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        suggested_display_precision=1,
+    ),
+    SmartTRVSensorDescription(
+        key="sun_reduction",
+        translation_key="sun_reduction",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        suggested_display_precision=1,
+    ),
     # What preheat has learned about the room.
     SmartTRVSensorDescription(
         key="preheat_lead",

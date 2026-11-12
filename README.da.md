@@ -152,6 +152,35 @@ Simulering (`python tests/simulate_preheat.py`) af 5 × 3 uger, hvor vejret skif
 | Før (én hastighed, +20 %) | 8 af 70 | 1,0 °C for lidt | 32 min |
 | Nu | 4 af 70 | 0,3 °C for lidt | 15 min |
 
+## Ude og ferie
+
+Vælg, hvem der tæller som hjemme, under Konfigurer → *Hjemme*, fx `zone.home` (antal personer hjemme) eller en person. Har ingen været hjemme i 30 minutter, holder rummet sin **Ude-temperatur** (`number.<rum>_away_temperature`, 17 °C fra start, indstilles på enhedssiden). Den skifter tilbage til den normale temperatur, så snart nogen er hjemme. Om natten bruges den laveste af ude- og nattemperaturen.
+
+Til ferie vælger du også en `input_datetime` under *Hjem fra ferie* og sætter den til, hvornår I kommer hjem. Mens ingen er hjemme, holder rummet ude-temperaturen og forvarmer, så det er varmt, når I kommer, ud fra det, forvarmningen har lært om rummet. Bliver I forsinket, holder den varmen i 12 timer efter hjemkomsttidspunktet. I forklaringen står der "🏠 Ingen hjemme" eller "🧳 Ferie".
+
+## Sommer
+
+Med en udeføler slukker Smart TRV varmen, når gennemsnittet udenfor over et døgn har ligget over 16 °C i et døgn, og tænder igen, når gennemsnittet kommer under 14 °C. Så regulerer TRV'erne ikke hele sommeren og bruger mindre batteri. Imens åbner den hver ventil i 10 minutter en gang om ugen (mellem kl. 10 og 16), så den ikke sætter sig fast til efteråret. Kan slås fra under Konfigurer → *Sluk om sommeren*.
+
+## Sol
+
+På solrige dage kan solen varme et rum over målet, og så har radiatoren allerede varmet. Med en vejr-entitet i Home Assistant (fx `weather.forecast_home`) lærer Smart TRV for hver time på dagen, hvor meget TRV'en skal skrues ned, når det er solrigt, og gør det en halv time før. Blev rummet alligevel for varmt, skruer den lidt mere ned næste solrige dag. Lå rummet derefter under målet, skruer den mindre ned. Let skyet tæller halvt. `sensor.<rum>_sun_reduction` (diagnostik) viser, hvor meget den skruer ned lige nu. Kan slås fra under Konfigurer → *Lær af solen*.
+
+I en rummodel, hvor solen varmer rummet fra kl. 13 til 17 på solrige dage, efter to uger:
+
+| Solvarme | Gennemsnitlig afvigelse kl. 10-20 | Højest | Lavest |
+|---|---|---|---|
+| Moderat, før | 0,10 °C | +0,25 °C | −0,25 °C |
+| Moderat, nu | 0,06 °C | +0,13 °C | −0,15 °C |
+| Kraftig, før | 0,36 °C | +0,78 °C | −0,31 °C |
+| Kraftig, nu | 0,22 °C | +0,55 °C | −0,24 °C |
+
+Med kraftig sol bliver rummet stadig varmere end målet: en lukket ventil kan ikke køle det.
+
+## Varmetid
+
+`sensor.<rum>_heating_today` viser, hvor mange timer rummet har varmet i dag (den starter forfra ved midnat), og `sensor.<rum>_heating_total` lægger al tiden sammen. Home Assistant gemmer statistik for begge, så et *Statistikgraf*-kort med "ændring" viser varmetiden pr. dag, uge eller måned for hvert rum side om side.
+
 ## Udetemperatur
 
 Vælg en udesensor under Konfigurer (fx `sensor.ude_ude_temperatur`). Så lægger Smart TRV `0,1 × (mål − ude)` oven i TRV-setpunktet og reagerer på kolde nætter, *før* rummet bliver koldt. Det lærte offset tager sig af resten. I simuleringen halveres svinget på en normal dag (21,75–22,24 → 21,89–22,13 °C). Tilføjes udesensoren til et rum, der allerede har lært, trækkes kompenseringen fra det lærte, så setpunktet ikke springer.

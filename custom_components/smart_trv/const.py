@@ -14,6 +14,10 @@ CONF_OUTDOOR_SENSOR = "outdoor_sensor"
 CONF_OUTDOOR_GAIN = "outdoor_gain"  # TRV °C per °C between room target and outdoors
 CONF_AUTO_TUNE = "auto_tune"
 CONF_PREHEAT = "preheat"
+CONF_PRESENCE = "presence"  # zone.home, a person, group or boolean: is anyone home
+CONF_RETURN_TIME = "return_time"  # input_datetime: back home from a holiday
+CONF_SUMMER = "summer_off"  # heating off in summer, with a weekly valve exercise
+CONF_SUN = "sun_learning"  # turn down ahead of the sun on sunny days
 CONF_HEATS_ROOMS = "heats_rooms"  # other Smart TRV rooms this room's wood stove warms
 
 DEFAULT_NAME = "Smart TRV"
@@ -28,6 +32,9 @@ DEFAULT_WINDOW_CLOSE_DELAY = 0
 DEFAULT_OUTDOOR_GAIN = 0.1
 DEFAULT_AUTO_TUNE = True
 DEFAULT_PREHEAT = True
+DEFAULT_SUMMER = True
+DEFAULT_SUN = True
+DEFAULT_AWAY_TEMPERATURE = 17.0
 
 # A TRV that hasn't reported for this long, or whose battery is this low, is a problem.
 TRV_STALE_HOURS = 6

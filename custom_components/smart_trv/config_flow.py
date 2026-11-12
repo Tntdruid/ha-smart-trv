@@ -26,6 +26,10 @@ from .const import (
     CONF_OUTDOOR_GAIN,
     CONF_OUTDOOR_SENSOR,
     CONF_PREHEAT,
+    CONF_PRESENCE,
+    CONF_RETURN_TIME,
+    CONF_SUMMER,
+    CONF_SUN,
     CONF_ROOM_SENSOR,
     CONF_TRVS,
     CONF_WINDOW_CLOSE_DELAY,
@@ -37,6 +41,8 @@ from .const import (
     DEFAULT_NAME,
     DEFAULT_OUTDOOR_GAIN,
     DEFAULT_PREHEAT,
+    DEFAULT_SUMMER,
+    DEFAULT_SUN,
     DEFAULT_WINDOW_CLOSE_DELAY,
     DEFAULT_WINDOW_OPEN_DELAY,
     DOMAIN,
@@ -86,6 +92,20 @@ def _room_schema(defaults: dict[str, Any]) -> dict:
             selector.EntitySelectorConfig(domain="sensor", device_class="temperature")
         ),
         vol.Required(CONF_PREHEAT, default=defaults.get(CONF_PREHEAT, DEFAULT_PREHEAT)):
+            selector.BooleanSelector(),
+        vol.Optional(
+            CONF_PRESENCE, description={"suggested_value": defaults.get(CONF_PRESENCE)}
+        ): selector.EntitySelector(
+            selector.EntitySelectorConfig(
+                domain=["zone", "person", "group", "device_tracker", "input_boolean", "binary_sensor"]
+            )
+        ),
+        vol.Optional(
+            CONF_RETURN_TIME, description={"suggested_value": defaults.get(CONF_RETURN_TIME)}
+        ): selector.EntitySelector(selector.EntitySelectorConfig(domain="input_datetime")),
+        vol.Required(CONF_SUMMER, default=defaults.get(CONF_SUMMER, DEFAULT_SUMMER)):
+            selector.BooleanSelector(),
+        vol.Required(CONF_SUN, default=defaults.get(CONF_SUN, DEFAULT_SUN)):
             selector.BooleanSelector(),
         vol.Optional(CONF_HEATS_ROOMS, default=defaults.get(CONF_HEATS_ROOMS) or []):
             selector.EntitySelector(
@@ -143,6 +163,8 @@ class SmartTRVOptionsFlow(OptionsFlow):
             # A cleared field is left out of user_input; store None so it overrides entry.data.
             data.setdefault(CONF_NIGHT_ENTITY, None)
             data.setdefault(CONF_OUTDOOR_SENSOR, None)
+            data.setdefault(CONF_PRESENCE, None)
+            data.setdefault(CONF_RETURN_TIME, None)
             return self.async_create_entry(data=data)
 
         current = {**self.config_entry.data, **self.config_entry.options}

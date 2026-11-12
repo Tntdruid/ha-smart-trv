@@ -13,7 +13,11 @@
           "window_close_delay": "Back on after closed (s)",
           "outdoor_sensor": "Outdoor temperature",
           "preheat": "Preheat before the night ends",
-          "heats_rooms": "Heat also reaches"
+          "heats_rooms": "Heat also reaches",
+          "presence": "Home",
+          "return_time": "Back from holiday",
+          "summer_off": "Off in summer",
+          "sun_learning": "Learn from the sun"
         },
         "data_description": {
           "room_sensor": "The sensor that measures the temperature you actually care about.",
@@ -22,7 +26,11 @@
           "window_close_delay": "How long it must stay closed before heating resumes. Default 0.",
           "outdoor_sensor": "Optional. Lets Smart TRV react to cold nights before the room cools down.",
           "preheat": "Learns how fast the room warms and starts early, so it is warm when the night schedule ends. Needs a schedule as night schedule.",
-          "heats_rooms": "Does this room have a wood stove or another heat source? Choose the other rooms its heat reaches. They then also stop learning while it burns."
+          "heats_rooms": "Does this room have a wood stove or another heat source? Choose the other rooms its heat reaches. They then also stop learning while it burns.",
+          "presence": "Optional. E.g. zone.home (people at home) or a person. When nobody has been home for 30 min, the room keeps its away temperature (set on the device page).",
+          "return_time": "Optional. An input_datetime with when you are back. While nobody is home, the room keeps its away temperature and warms up in time for your return.",
+          "summer_off": "Needs an outdoor sensor. Turns heating off once it has averaged over 16 °C outside for a day, and back on under 14 °C. Meanwhile the valves are exercised once a week.",
+          "sun_learning": "Needs a weather entity. Learns when the sun warms the room and turns down a little ahead of it on sunny days."
         },
         "sections": {
           "advanced": {
@@ -58,7 +66,11 @@
           "window_close_delay": "Back on after closed (s)",
           "outdoor_sensor": "Outdoor temperature",
           "preheat": "Preheat before the night ends",
-          "heats_rooms": "Heat also reaches"
+          "heats_rooms": "Heat also reaches",
+          "presence": "Home",
+          "return_time": "Back from holiday",
+          "summer_off": "Off in summer",
+          "sun_learning": "Learn from the sun"
         },
         "data_description": {
           "room_sensor": "The sensor that measures the temperature you actually care about.",
@@ -67,7 +79,11 @@
           "window_close_delay": "How long it must stay closed before heating resumes. Default 0.",
           "outdoor_sensor": "Optional. Lets Smart TRV react to cold nights before the room cools down.",
           "preheat": "Learns how fast the room warms and starts early, so it is warm when the night schedule ends. Needs a schedule as night schedule.",
-          "heats_rooms": "Does this room have a wood stove or another heat source? Choose the other rooms its heat reaches. They then also stop learning while it burns."
+          "heats_rooms": "Does this room have a wood stove or another heat source? Choose the other rooms its heat reaches. They then also stop learning while it burns.",
+          "presence": "Optional. E.g. zone.home (people at home) or a person. When nobody has been home for 30 min, the room keeps its away temperature (set on the device page).",
+          "return_time": "Optional. An input_datetime with when you are back. While nobody is home, the room keeps its away temperature and warms up in time for your return.",
+          "summer_off": "Needs an outdoor sensor. Turns heating off once it has averaged over 16 °C outside for a day, and back on under 14 °C. Meanwhile the valves are exercised once a week.",
+          "sun_learning": "Needs a weather entity. Learns when the sun warms the room and turns down a little ahead of it on sunny days."
         },
         "sections": {
           "advanced": {
@@ -134,11 +150,23 @@
       },
       "last_preheat": {
         "name": "Last preheat"
+      },
+      "heating_today": {
+        "name": "Heating today"
+      },
+      "heating_total": {
+        "name": "Heating time total"
+      },
+      "sun_reduction": {
+        "name": "Sun reduction"
       }
     },
     "number": {
       "night_temperature": {
         "name": "Night temperature"
+      },
+      "away_temperature": {
+        "name": "Away temperature"
       }
     },
     "binary_sensor": {

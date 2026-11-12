@@ -25,6 +25,12 @@ HOT_RADIATOR_DROP = 0.5
 TEXT: dict[str, dict[str, str]] = {
     "da": {
         "off": "Slukket. TRV'erne er slukket.",
+        "summer": "☀️ Sommer: varmen er slukket, fordi det i gennemsnit har været over 16 °C udenfor i et døgn. Den tænder selv igen, når det bliver koldere.",
+        "exercise": "🔧 Motionerer ventilerne (en gang om ugen om sommeren), så de ikke sætter sig fast. ",
+        "away": "🏠 Ingen hjemme: rummet holder ude-temperaturen. ",
+        "holiday": "🧳 Ferie: rummet holder ude-temperaturen, til I kommer hjem {time}. ",
+        "preheat_home": "☀️ Forvarmer: rummet skal være {target} kl. {time}, når I kommer hjem. ",
+        "parts_sun": " − sol {s}",
         "window": "Vindue åbent. TRV'erne er slukket, og læringen står på pause.",
         "window_resume": " Lukket igen: varmen starter om {s} sek.",
         "no_sensor": "Ingen måling fra rumsensoren. TRV'erne beholder sidste setpunkt.",
@@ -81,6 +87,12 @@ TEXT: dict[str, dict[str, str]] = {
     },
     "en": {
         "off": "Off. The TRVs are off.",
+        "summer": "☀️ Summer: heating is off because it has averaged over 16 °C outside for a day. It turns back on by itself when it gets colder.",
+        "exercise": "🔧 Exercising the valves (once a week in summer) so they don't seize. ",
+        "away": "🏠 Nobody home: the room keeps its away temperature. ",
+        "holiday": "🧳 Holiday: the room keeps its away temperature until you are back {time}. ",
+        "preheat_home": "☀️ Preheating: the room should be {target} at {time}, when you are back. ",
+        "parts_sun": " − sun {s}",
         "window": "Window open. The TRVs are off and learning is paused.",
         "window_resume": " Closed again: heating resumes in {s} s.",
         "no_sensor": "No reading from the room sensor. The TRVs keep their last setpoint.",
@@ -193,7 +205,7 @@ def _explain_control(
 
     status = diag["status"]
     if status == STATUS_OFF:
-        return t["off"]
+        return t["summer"] if diag.get("summer") else t["off"]
     if status == STATUS_WINDOW:
         text = t["window"]
         if diag.get("window_pending") == "on":
@@ -224,11 +236,16 @@ def _explain_control(
     pending = ""
     if diag.get("window_pending") == "off":
         pending = t["window_pending"].format(s=diag.get("window_seconds_left"))
-    mode = ""
+    mode = t["exercise"] if diag.get("exercising") else ""
     if diag.get("preheat_until"):
-        mode = t["preheat"].format(target=c(diag.get("day_target")), time=diag["preheat_until"])
+        key = "preheat_home" if diag.get("preheat_home") else "preheat"
+        mode += t[key].format(target=c(diag.get("day_target")), time=diag["preheat_until"])
+    elif diag.get("holiday_until"):
+        mode += t["holiday"].format(time=diag["holiday_until"])
+    elif diag.get("away"):
+        mode += t["away"]
     elif diag.get("night_active"):
-        mode = t["night"]
+        mode += t["night"]
     if diag.get("heat_source"):
         mode += t["heat_source"]
     elif diag.get("heat_from_room"):
@@ -240,6 +257,8 @@ def _explain_control(
     parts = t["parts"].format(i=c(diag["integral"]), p=c(diag["p_term"]))
     if outdoor >= 0.05:
         parts += t["parts_outdoor"].format(o=c(outdoor))
+    if (sun := diag.get("sun_reduction") or 0.0) >= 0.05:
+        parts += t["parts_sun"].format(s=c(sun))
     text = pending + mode + t["sentence"].format(
         where=where, sp=c(diag["trv_setpoint"]), reads=reads, valve=valve, parts=parts
     )

@@ -13,7 +13,11 @@
           "window_close_delay": "Tænd igen efter lukket (sek.)",
           "outdoor_sensor": "Udetemperatur",
           "preheat": "Forvarm før natten slutter",
-          "heats_rooms": "Varmen når også ud til"
+          "heats_rooms": "Varmen når også ud til",
+          "presence": "Hjemme",
+          "return_time": "Hjem fra ferie",
+          "summer_off": "Sluk om sommeren",
+          "sun_learning": "Lær af solen"
         },
         "data_description": {
           "room_sensor": "Sensoren der måler den temperatur, du faktisk vil styre efter.",
@@ -22,7 +26,11 @@
           "window_close_delay": "Hvor længe der skal være lukket, før varmen starter igen. Standard 0.",
           "outdoor_sensor": "Valgfri. Så kan Smart TRV reagere på kolde nætter, før rummet bliver koldt.",
           "preheat": "Lærer hvor hurtigt rummet varmer op og starter tidligt nok til, at det er varmt, når natplanen slutter. Kræver en tidsplan som natplan.",
-          "heats_rooms": "Har rummet en brændeovn eller en anden varmekilde? Vælg de andre rum, varmen når ud til. De holder så også pause med at lære, mens den brænder."
+          "heats_rooms": "Har rummet en brændeovn eller en anden varmekilde? Vælg de andre rum, varmen når ud til. De holder så også pause med at lære, mens den brænder.",
+          "presence": "Valgfri. Fx zone.home (antal personer hjemme) eller en person. Har ingen været hjemme i 30 min, holder rummet sin ude-temperatur (indstilles på enhedssiden).",
+          "return_time": "Valgfri. En input_datetime med, hvornår I kommer hjem. Mens ingen er hjemme, holder rummet ude-temperaturen og varmer op, så det er varmt, når I kommer.",
+          "summer_off": "Kræver udetemperatur. Slukker varmen, når det i gennemsnit har været over 16 °C udenfor i et døgn, og tænder igen under 14 °C. Imens motioneres ventilerne en gang om ugen.",
+          "sun_learning": "Kræver en vejr-entitet. Lærer, hvornår solen varmer rummet, og skruer lidt ned før på solrige dage."
         },
         "sections": {
           "advanced": {
@@ -58,7 +66,11 @@
           "window_close_delay": "Tænd igen efter lukket (sek.)",
           "outdoor_sensor": "Udetemperatur",
           "preheat": "Forvarm før natten slutter",
-          "heats_rooms": "Varmen når også ud til"
+          "heats_rooms": "Varmen når også ud til",
+          "presence": "Hjemme",
+          "return_time": "Hjem fra ferie",
+          "summer_off": "Sluk om sommeren",
+          "sun_learning": "Lær af solen"
         },
         "data_description": {
           "room_sensor": "Sensoren der måler den temperatur, du faktisk vil styre efter.",
@@ -67,7 +79,11 @@
           "window_close_delay": "Hvor længe der skal være lukket, før varmen starter igen. Standard 0.",
           "outdoor_sensor": "Valgfri. Så kan Smart TRV reagere på kolde nætter, før rummet bliver koldt.",
           "preheat": "Lærer hvor hurtigt rummet varmer op og starter tidligt nok til, at det er varmt, når natplanen slutter. Kræver en tidsplan som natplan.",
-          "heats_rooms": "Har rummet en brændeovn eller en anden varmekilde? Vælg de andre rum, varmen når ud til. De holder så også pause med at lære, mens den brænder."
+          "heats_rooms": "Har rummet en brændeovn eller en anden varmekilde? Vælg de andre rum, varmen når ud til. De holder så også pause med at lære, mens den brænder.",
+          "presence": "Valgfri. Fx zone.home (antal personer hjemme) eller en person. Har ingen været hjemme i 30 min, holder rummet sin ude-temperatur (indstilles på enhedssiden).",
+          "return_time": "Valgfri. En input_datetime med, hvornår I kommer hjem. Mens ingen er hjemme, holder rummet ude-temperaturen og varmer op, så det er varmt, når I kommer.",
+          "summer_off": "Kræver udetemperatur. Slukker varmen, når det i gennemsnit har været over 16 °C udenfor i et døgn, og tænder igen under 14 °C. Imens motioneres ventilerne en gang om ugen.",
+          "sun_learning": "Kræver en vejr-entitet. Lærer, hvornår solen varmer rummet, og skruer lidt ned før på solrige dage."
         },
         "sections": {
           "advanced": {
@@ -134,11 +150,23 @@
       },
       "last_preheat": {
         "name": "Sidste forvarmning"
+      },
+      "heating_today": {
+        "name": "Varmetid i dag"
+      },
+      "heating_total": {
+        "name": "Varmetid i alt"
+      },
+      "sun_reduction": {
+        "name": "Solsænkning"
       }
     },
     "number": {
       "night_temperature": {
         "name": "Nattemperatur"
+      },
+      "away_temperature": {
+        "name": "Ude-temperatur"
       }
     },
     "binary_sensor": {
